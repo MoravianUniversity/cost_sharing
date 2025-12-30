@@ -12,6 +12,6 @@ jobs:
       - name: Setup Repo & Environment
         uses: ./.github/actions/setup_venv
 
-      - name: Execute Makefile Static Tests
+      - name: Execute Static Analysis
         run: .venv/bin/pylint src tests
 
