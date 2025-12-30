@@ -1,0 +1,990 @@
+openapi: 3.0.0
+info:
+  title: Cost Sharing API
+  description: API for managing shared expenses and calculating balances among group members
+  version: 1.0.0
+  contact:
+    name: Moravian University CS Department
+
+servers:
+  - url: https://api.example.com/v1
+    description: Production server
+  - url: http://localhost:5000/v1
+    description: Development server
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Auth
+    description: Authentication endpoints
+  - name: Groups
+    description: Group management endpoints
+  - name: Expenses
+    description: Expense management endpoints
+  - name: Reconciliation
+    description: Balance calculations and settlement planning endpoints
+
+paths:
+  /auth/callback:
+    get:
+      tags:
+        - Auth
+      summary: OAuth callback endpoint
+      description: Handles Google OAuth callback and creates user account if first login
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          description: OAuth authorization code
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: Bearer token for API requests
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Bad request - invalid OAuth code or callback error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+              examples:
+                missing_code:
+                  summary: Missing authorization code
+                  value:
+                    error: "Validation failed"
+                    message: "code parameter is required"
+                invalid_code:
+                  summary: Invalid authorization code
+                  value:
+                    error: "Validation failed"
+                    message: "Invalid or expired authorization code"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      tags:
+        - Auth
+      summary: Get current user info
+      description: Returns information about the authenticated user
+      responses:
+        '200':
+          description: User information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /groups:
+    get:
+      tags:
+        - Groups
+      summary: List user's groups
+      description: Returns all groups the authenticated user belongs to
+      responses:
+        '200':
+          description: List of groups
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  groups:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GroupSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - Groups
+      summary: Create a new group
+      description: Creates a new cost-sharing group with the authenticated user as a member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  example: "Roommates Spring 2025"
+                description:
+                  type: string
+                  maxLength: 500
+                  example: "Shared expenses for apartment 4B"
+      responses:
+        '201':
+          description: Group created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupCreated'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+              examples:
+                missing_name:
+                  summary: Missing required field
+                  value:
+                    error: "Validation failed"
+                    message: "name is required"
+                empty_name:
+                  summary: Empty name
+                  value:
+                    error: "Validation failed"
+                    message: "name must be at least 1 character"
+                name_too_long:
+                  summary: Name too long
+                  value:
+                    error: "Validation failed"
+                    message: "name must be at most 100 characters"
+                description_too_long:
+                  summary: Description too long
+                  value:
+                    error: "Validation failed"
+                    message: "description must be at most 500 characters"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /groups/{groupId}:
+    get:
+      tags:
+        - Groups
+      summary: Get group details
+      description: Returns group information including members. Caller must be a member of the group.
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '200':
+          description: Group details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Groups
+      summary: Delete a group
+      description: Deletes a group (only if no expenses exist). Caller must be a member of the group.
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '204':
+          description: Group deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Cannot delete group with existing expenses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Conflict"
+                message: "Cannot delete group with existing expenses"
+
+  /groups/{groupId}/members:
+    post:
+      tags:
+        - Groups
+      summary: Add member to group
+      description: Adds a member to the group by email. Creates placeholder account if user hasn't logged in yet. When a placeholder user logs in for the first time via OAuth, their account is activated with the email and name from OAuth. Caller must be a member of the group.
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - name
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "student@moravian.edu"
+                name:
+                  type: string
+                  example: "John Smith"
+      responses:
+        '201':
+          description: Member added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  member:
+                    $ref: '#/components/schemas/User'
+                  isNewUser:
+                    type: boolean
+                    description: True if a placeholder account was created
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+              examples:
+                missing_email:
+                  summary: Missing required field
+                  value:
+                    error: "Validation failed"
+                    message: "email is required"
+                missing_name:
+                  summary: Missing required field
+                  value:
+                    error: "Validation failed"
+                    message: "name is required"
+                invalid_email:
+                  summary: Invalid email format
+                  value:
+                    error: "Validation failed"
+                    message: "email must be a valid email address"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: User is already a member of this group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Conflict"
+                message: "User is already a member of this group"
+
+  /groups/{groupId}/members/{userId}:
+    delete:
+      tags:
+        - Groups
+      summary: Remove member from group
+      description: Removes a member from the group. Users can remove themselves, or any member can remove others. A member cannot be removed if they are the group creator or if they are involved in any expenses (either as paidBy or in splitBetween for any expense in the group).
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID of the user to remove
+      responses:
+        '204':
+          description: Member removed successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Group or user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Resource not found"
+                message: "User not found"
+        '409':
+          description: Cannot remove member. Either the member is the group creator, or the member is involved in expenses (either as paidBy or in splitBetween for at least one expense in the group).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                creator:
+                  summary: Cannot remove group creator
+                  value:
+                    error: "Conflict"
+                    message: "Cannot remove group creator"
+                involved_in_expenses:
+                  summary: Cannot remove member involved in expenses
+                  value:
+                    error: "Conflict"
+                    message: "Cannot remove member who is involved in expenses"
+
+  /groups/{groupId}/expenses:
+    get:
+      tags:
+        - Expenses
+      summary: List group expenses
+      description: Returns all expenses for the group. Caller must be a member of the group.
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '200':
+          description: List of expenses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  expenses:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Expense'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags:
+        - Expenses
+      summary: Create new expense
+      description: "Records a new expense in the group. The authenticated user (caller) is automatically set as the person who paid. You can only create expenses that you paid for. Caller must be a member of the group. Validation rules: authenticated user must be included in splitBetween, all users in splitBetween must be members of the group."
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - description
+                - amount
+                - date
+                - splitBetween
+              properties:
+                description:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  example: "Grocery shopping at Wegmans"
+                amount:
+                  type: number
+                  format: float
+                  minimum: 0.01
+                  example: 87.43
+                  description: Total amount in dollars
+                date:
+                  type: string
+                  format: date
+                  example: "2025-01-15"
+                  description: ISO 8601 date format (YYYY-MM-DD)
+                splitBetween:
+                  type: array
+                  items:
+                    type: integer
+                  minItems: 1
+                  description: "Array of user IDs to split the expense among. Must include the authenticated user's ID. All users must be members of the group."
+                  example: [1, 2]
+      responses:
+        '201':
+          description: Expense created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+              examples:
+                missing_description:
+                  summary: Missing required field
+                  value:
+                    error: "Validation failed"
+                    message: "description is required"
+                missing_amount:
+                  summary: Missing required field
+                  value:
+                    error: "Validation failed"
+                    message: "amount is required"
+                missing_date:
+                  summary: Missing required field
+                  value:
+                    error: "Validation failed"
+                    message: "date is required"
+                missing_splitBetween:
+                  summary: Missing required field
+                  value:
+                    error: "Validation failed"
+                    message: "splitBetween is required"
+                invalid_amount:
+                  summary: Invalid amount
+                  value:
+                    error: "Validation failed"
+                    message: "amount must be at least 0.01"
+                invalid_description_length:
+                  summary: Description length invalid
+                  value:
+                    error: "Validation failed"
+                    message: "description must be between 1 and 200 characters"
+                invalid_date_format:
+                  summary: Invalid date format
+                  value:
+                    error: "Validation failed"
+                    message: "date must be in ISO 8601 format (YYYY-MM-DD)"
+                empty_splitBetween:
+                  summary: Empty splitBetween array
+                  value:
+                    error: "Validation failed"
+                    message: "splitBetween must contain at least one user ID"
+                user_not_in_splitBetween:
+                  summary: Authenticated user not in splitBetween
+                  value:
+                    error: "Validation failed"
+                    message: "splitBetween must include the authenticated user's ID"
+                user_not_in_group:
+                  summary: User in splitBetween is not a group member
+                  value:
+                    error: "Validation failed"
+                    message: "All users in splitBetween must be members of the group"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /groups/{groupId}/expenses/{expenseId}:
+    get:
+      tags:
+        - Expenses
+      summary: Get expense details
+      description: Returns details of a specific expense. Caller must be a member of the group.
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/ExpenseId'
+      responses:
+        '200':
+          description: Expense details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Expense not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Resource not found"
+                message: "Expense not found"
+
+    put:
+      tags:
+        - Expenses
+      summary: Update expense
+      description: "Updates an existing expense. Caller must be a member of the group AND must be the person who paid for this expense. Only the payer can modify their expenses. The payer (paidBy) cannot be changed - it remains the same as when the expense was created. Validation rules: authenticated user must be included in splitBetween, all users in splitBetween must be members of the group."
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/ExpenseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - description
+                - amount
+                - date
+                - splitBetween
+              properties:
+                description:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  example: "Grocery shopping at Wegmans (updated)"
+                amount:
+                  type: number
+                  format: float
+                  minimum: 0.01
+                  example: 92.15
+                  description: Total amount in dollars
+                date:
+                  type: string
+                  format: date
+                  example: "2025-01-15"
+                  description: ISO 8601 date format (YYYY-MM-DD)
+                splitBetween:
+                  type: array
+                  items:
+                    type: integer
+                  minItems: 1
+                  description: "Array of user IDs to split the expense among. Must include the authenticated user's ID (the payer). All users must be members of the group."
+                  example: [1, 2]
+      responses:
+        '200':
+          description: Expense updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+              examples:
+                missing_description:
+                  summary: Missing required field
+                  value:
+                    error: "Validation failed"
+                    message: "description is required"
+                missing_amount:
+                  summary: Missing required field
+                  value:
+                    error: "Validation failed"
+                    message: "amount is required"
+                missing_date:
+                  summary: Missing required field
+                  value:
+                    error: "Validation failed"
+                    message: "date is required"
+                missing_splitBetween:
+                  summary: Missing required field
+                  value:
+                    error: "Validation failed"
+                    message: "splitBetween is required"
+                invalid_amount:
+                  summary: Invalid amount
+                  value:
+                    error: "Validation failed"
+                    message: "amount must be at least 0.01"
+                invalid_description_length:
+                  summary: Description length invalid
+                  value:
+                    error: "Validation failed"
+                    message: "description must be between 1 and 200 characters"
+                invalid_date_format:
+                  summary: Invalid date format
+                  value:
+                    error: "Validation failed"
+                    message: "date must be in ISO 8601 format (YYYY-MM-DD)"
+                empty_splitBetween:
+                  summary: Empty splitBetween array
+                  value:
+                    error: "Validation failed"
+                    message: "splitBetween must contain at least one user ID"
+                user_not_in_splitBetween:
+                  summary: Authenticated user not in splitBetween
+                  value:
+                    error: "Validation failed"
+                    message: "splitBetween must include the authenticated user's ID (the payer)"
+                user_not_in_group:
+                  summary: User in splitBetween is not a group member
+                  value:
+                    error: "Validation failed"
+                    message: "All users in splitBetween must be members of the group"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden - caller is not the person who paid for this expense
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizationError'
+              example:
+                error: "Forbidden"
+                message: "Only the person who paid for this expense can modify it"
+        '404':
+          description: Expense not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Resource not found"
+                message: "Expense not found"
+
+    delete:
+      tags:
+        - Expenses
+      summary: Delete expense
+      description: "Deletes an expense. Caller must be a member of the group AND must be the person who paid (paidBy) for this expense. Only the payer can delete their expenses."
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/ExpenseId'
+      responses:
+        '204':
+          description: Expense deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden - caller is not the person who paid for this expense
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizationError'
+              example:
+                error: "Forbidden"
+                message: "Only the person who paid for this expense can delete it"
+        '404':
+          description: Expense not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Resource not found"
+                message: "Expense not found"
+
+  /groups/{groupId}/balances:
+    get:
+      tags:
+        - Reconciliation
+      summary: Get group balances
+      description: Calculates and returns current balances showing who owes whom. Caller must be a member of the group.
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '200':
+          description: Current balances
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  balances:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Balance'
+                  summary:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserBalance'
+                    description: Per-user summary showing net balance
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /groups/{groupId}/settlements:
+    get:
+      tags:
+        - Reconciliation
+      summary: Get optimized settlement plan
+      description: "[STRETCH GOAL] Calculates the minimum number of transactions needed to settle all debts. Caller must be a member of the group."
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '200':
+          description: Optimized settlement transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  settlements:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Settlement'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Google OAuth token
+
+  parameters:
+    GroupId:
+      name: groupId
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: Unique identifier for the group
+
+    ExpenseId:
+      name: expenseId
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: Unique identifier for the expense
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        email:
+          type: string
+          format: email
+          example: "student@moravian.edu"
+        name:
+          type: string
+          example: "John Smith"
+
+    GroupSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "Roommates Spring 2025"
+        description:
+          type: string
+          example: "Shared expenses for apartment 4B"
+        memberCount:
+          type: integer
+          example: 4
+
+    Group:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "Roommates Spring 2025"
+        description:
+          type: string
+          example: "Shared expenses for apartment 4B"
+        createdBy:
+          $ref: '#/components/schemas/User'
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+
+    GroupCreated:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "Roommates Spring 2025"
+        description:
+          type: string
+          example: "Shared expenses for apartment 4B"
+        createdBy:
+          $ref: '#/components/schemas/User'
+        memberCount:
+          type: integer
+          example: 1
+
+    Expense:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        groupId:
+          type: integer
+          example: 1
+        description:
+          type: string
+          example: "Grocery shopping at Wegmans"
+        amount:
+          type: number
+          format: float
+          example: 87.43
+        date:
+          type: string
+          format: date
+          example: "2025-01-15"
+          description: ISO 8601 date format (YYYY-MM-DD)
+        paidBy:
+          $ref: '#/components/schemas/User'
+        splitBetween:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+          description: Array of users the expense is split between. In the example, this contains 2 users, resulting in perPersonAmount of 43.72 (87.43 / 2, rounded to 2 decimal places).
+        perPersonAmount:
+          type: number
+          format: float
+          example: 43.72
+          description: Calculated equal split amount (amount / number of people in splitBetween). Rounded to 2 decimal places. When division results in a remainder, the perPersonAmount is rounded using standard currency rounding (round half up), and the sum of perPersonAmount × splitBetween.length may differ slightly from the total amount due to rounding.
+
+    Balance:
+      type: object
+      description: Represents a debt between two users
+      properties:
+        from:
+          $ref: '#/components/schemas/User'
+        to:
+          $ref: '#/components/schemas/User'
+        amount:
+          type: number
+          format: float
+          example: 45.67
+          description: Amount that 'from' owes 'to'
+
+    UserBalance:
+      type: object
+      description: Per-user summary of net balance
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        netBalance:
+          type: number
+          format: float
+          example: -23.45
+          description: Negative means user owes money, positive means user is owed money
+        totalPaid:
+          type: number
+          format: float
+          example: 150.00
+          description: Total amount this user has paid
+        totalOwed:
+          type: number
+          format: float
+          example: 173.45
+          description: Total amount this user owes (their share of all expenses)
+
+    Settlement:
+      type: object
+      description: "[STRETCH GOAL] Optimized payment transaction"
+      properties:
+        from:
+          $ref: '#/components/schemas/User'
+        to:
+          $ref: '#/components/schemas/User'
+        amount:
+          type: number
+          format: float
+          example: 45.67
+          description: Amount to transfer to settle debts
+
+    ValidationError:
+      type: object
+      description: Detailed error response for validation errors (400). Contains specific validation failure information since user is authenticated.
+      properties:
+        error:
+          type: string
+          example: "Validation failed"
+        message:
+          type: string
+          example: "One or more validation errors occurred"
+          description: Specific validation error message. May reference field names, constraints, or business rules.
+
+    AuthorizationError:
+      type: object
+      description: Generic error response for authentication (401) and authorization (403) failures. Does not reveal specific failure reasons to prevent information disclosure.
+      properties:
+        error:
+          type: string
+          example: "Unauthorized"
+          description: Generic error type - does not reveal specific failure reason
+        message:
+          type: string
+          example: "Authentication required"
+          description: Generic message - does not reveal whether user exists, token format, or specific failure reason
+
+    SecurityError:
+      type: object
+      description: Generic error response for security-related failures beyond authentication/authorization. Does not reveal specific failure reasons to prevent information disclosure.
+      properties:
+        error:
+          type: string
+          example: "Security error"
+          description: Generic error type - does not reveal specific failure reason
+        message:
+          type: string
+          example: "A security error occurred"
+          description: Generic message - does not reveal specific security failure details
+
+    Error:
+      type: object
+      description: General error response for business logic errors (404, 409, etc.)
+      properties:
+        error:
+          type: string
+          example: "Resource not found"
+        message:
+          type: string
+          example: "Group not found"
+
+  responses:
+    BadRequest:
+      description: Bad request - validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+
+    Unauthorized:
+      description: Unauthorized - missing or invalid authentication token. Response is generic to prevent information disclosure.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AuthorizationError'
+
+    Forbidden:
+      description: Forbidden - user does not have access to this resource. Response is generic to prevent information disclosure.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AuthorizationError'
+          example:
+            error: "Forbidden"
+            message: "Access denied"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
