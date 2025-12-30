@@ -9,14 +9,12 @@ def create_app():
 
     return app
 
-def launch():
+
+# This is "main" for the gunicorn launch and cannot be tested directly
+def launch():  # pragma: no cover
     return create_app()
 
 
-def main():
-    app = create_app()
-    app.run(debug=True, port=8000)
-
-
-if __name__ == '__main__':
-    main()
+# This is "main" for the local launch and can be tested directly
+if __name__ == '__main__':  # pragma: no cover
+    launch().run(debug=True, port=8000)
