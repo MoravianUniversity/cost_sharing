@@ -1,18 +1,25 @@
-name: Deploy on AWS
+name: Redeploy on AWS
 
 on: 
   workflow_dispatch:  # this has to be triggered manually
 
 jobs:
-  deploy:
+  Redeploy:
+    name: Redeploy to EC2
     runs-on: ubuntu-latest
+    
     steps:
-      - name: ssh-pipeline
-        uses: cross-the-world/ssh-pipeline@v1.2.0
-        with:
-          host: ${{ secrets.HOSTNAME }}
-          user: ec2-user
-          key: ${{ secrets.LABSUSERPEM }}
-          script: |
-            cd /home/ec2-user/cost_sharing
-            ./redeploy.sh
+      - name: Redploy via SSH
+        env:
+            PRIVATE_KEY: ${{ secrets.LABSUSERPEM }}
+            HOSTNAME: ${{ secrets.HOSTNAME }}
+            USER_NAME: ec2-user
+      
+        run: |
+          echo "$PRIVATE_KEY" > private_key && chmod 600 private_key
+          ssh -o StrictHostKeyChecking=no -i private_key ${USER_NAME}@${HOSTNAME} '
+
+              # Now we have got the access of EC2 and we will start the deploy .
+              cd /home/ec2-user/cost_sharing
+              ./redeploy.sh
+              '
