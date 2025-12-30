@@ -4,3 +4,6 @@ pytest-cov
 python-dotenv
 pylint
 gunicorn
+google-auth
+google-auth-oauthlib
+PyJWT
