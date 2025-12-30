@@ -18,4 +18,3 @@ def launch():  # pragma: no cover
 # This is "main" for the local launch and can be tested directly
 if __name__ == '__main__':  # pragma: no cover
     launch().run(debug=True, port=8000)
-
