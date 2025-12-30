@@ -4,7 +4,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/home/ec2-user/cost_sharing/.venv/bin/gunicorn --chdir /home/ec2-user/cost_sharing --bind 0.0.0.0:80 "cost_sharing.app:launch()"
+ExecStart=/home/ec2-user/cost_sharing/.venv/bin/gunicorn --certfile /etc/letsencrypt/live/colemanbcostsharing.moraviancs.click/fullchain.pem --keyfile /etc/letsencrypt/live/colemanbcostsharing.moraviancs.click/privkey.pem --chdir /home/ec2-user/cost_sharing --bind 0.0.0.0:443 "cost_sharing.app:launch()"
 
 [Install]
 WantedBy=multi-user.target
