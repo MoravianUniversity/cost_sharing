@@ -36,3 +36,11 @@ Test can be run in the root of the project or from the `tests` folder.  They can
   ```
   pytest
   ```
+
+## Run Static Analysis
+
+To check the source and tests for compiance to style guides:
+
+  ```
+  pylint src tests
+  ```
