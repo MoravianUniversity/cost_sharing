@@ -44,3 +44,47 @@ To check the source and tests for compiance to style guides:
   ```
   pylint src tests
   ```
+
+
+## Manual Deploy on EC2
+
+* Create an EC2 Instance
+  * t3.micro
+  * Use `labsuser.pem`
+  * Enable port 80 and 443
+* SSH to instance
+
+  ```
+  ssh -i ~/.ssh/labsuser.pem ec2-user@<instance IP>
+  ```
+
+* Install `git`
+
+  ```
+  sudo yum install -y git
+  ```
+
+* Clone repo
+
+  ```
+  git clone <repo url>
+  ```
+
+* In repo, create `.venv` and install libraries
+
+  ```
+  cd cost_sharing
+  python3 -m venv .venv
+  .venv/bin/pip install -r requirements.txt
+  .venv/bin/pip install -e .
+  ```
+
+* Configure app to launch with Systemd
+
+  ```
+  sudo cp flask.service /etc/systemd/system
+  sudo systemctl enable flask.service
+  sudo systemctl start flask.service
+  ```
+
+  Verify with `sudo systemctl status flask.service`

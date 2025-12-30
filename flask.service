@@ -1,0 +1,10 @@
+[Unit]
+Description=Launch the Flask server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/home/ec2-user/cost_sharing/.venv/bin/gunicorn --chdir /home/ec2-user/cost_sharing --bind 0.0.0.0:80 "cost_sharing.app:launch()"
+
+[Install]
+WantedBy=multi-user.target

@@ -9,6 +9,9 @@ def create_app():
 
     return app
 
+def launch():
+    return create_app()
+    
 
 def main():
     app = create_app()
