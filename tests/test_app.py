@@ -3,13 +3,9 @@ import pytest
 from cost_sharing.app import create_app
 
 
-@pytest.fixture
-def app():
+@pytest.fixture(name='client')
+def create_client():
     app = create_app()
-    yield app
-
-@pytest.fixture
-def client(app):
     return app.test_client()
 
 def test_index(client):

@@ -1,0 +1,27 @@
+[MASTER]
+# Specify directories or files to analyze (relative to where you run pylint)
+# Leave empty to analyze all Python files found
+ignore=CVS,.git,__pycache__,.egg-info
+
+# Add patterns to ignore (supports wildcards)
+ignore-patterns=.*\.egg-info,.*__pycache__.*
+
+[MESSAGES CONTROL]
+
+# All checks are enabled except the following
+disable=missing-class-docstring,
+    missing-module-docstring,
+    missing-function-docstring
+
+[REFACTORING]
+max-nested-blocks=3
+
+[DESIGN]
+max-args=4
+max-bool-expr=3
+max-branches=5
+max-locals=8
+max-public-methods=10
+max-returns=4
+max-statements=20
+
