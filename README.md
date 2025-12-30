@@ -51,7 +51,7 @@ To check the source and tests for compiance to style guides:
 * Create an EC2 Instance
   * t3.micro
   * Use `labsuser.pem`
-  * Enable port 80 and 443
+  * Enable port 443
 * SSH to instance
 
   ```
@@ -78,6 +78,34 @@ To check the source and tests for compiance to style guides:
   .venv/bin/pip install -r requirements.txt
   .venv/bin/pip install -e .
   ```
+
+* Add credentials to `.env` for subdomain registration
+
+  ```
+  USERNAME=<username>
+  TOKEN=<token>
+  LABEL=costsharing
+  ```
+
+  This step used the [AWS DNS Subdomain System](https://webapps.cs.moravian.edu/awsdns/).
+
+* Register your subdomain
+
+  ```
+  ./register_ip.sh
+  ```
+
+* Create SSL certificates (commands from the [Let's Encrypt Setup](https://certbot.eff.org/instructions?ws=other&os=pip))
+
+  ```
+  sudo python3 -m venv /opt/certbot/
+  sudo /opt/certbot/bin/pip install --upgrade pip
+  sudo /opt/certbot/bin/pip install certbot certbot
+  sudo ln -s /opt/certbot/bin/certbot /usr/bin/certbot
+  sudo certbot certonly --standalone
+  ```
+
+  When prompted, use the subdomain `<username>costsharing.moraviancs.click`
 
 * Configure app to launch with Systemd
 
