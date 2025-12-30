@@ -1,0 +1,18 @@
+name: "Setup Environment"
+description: "Setup the environment for the project"
+runs:
+  using: "composite"
+  steps:
+
+    - name: Setup Python Version
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.14
+
+    - name: Create Virtual Environment and installing requirements and the module
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        python3 -m venv .venv
+        .venv/bin/pip install -r requirements.txt
+        .venv/bin/pip install .
