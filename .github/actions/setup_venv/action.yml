@@ -7,7 +7,7 @@ runs:
     - name: Setup Python Version
       uses: actions/setup-python@v2
       with:
-        python-version: 3.14
+        python-version: 3.12
 
     - name: Create Virtual Environment and installing requirements and the module
       shell: bash
@@ -15,4 +15,4 @@ runs:
         python -m pip install --upgrade pip
         python3 -m venv .venv
         .venv/bin/pip install -r requirements.txt
-        .venv/bin/pip install .
+        .venv/bin/pip install -e .

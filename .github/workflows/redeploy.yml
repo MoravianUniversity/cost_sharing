@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Redploy via SSH
+      - name: Redeploy via SSH
         env:
             PRIVATE_KEY: ${{ secrets.LABSUSERPEM }}
             HOSTNAME: ${{ secrets.HOSTNAME }}

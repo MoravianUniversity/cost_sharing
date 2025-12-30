@@ -29,7 +29,7 @@
   This will run `setup.py` to create a `cost_sharing` package
 
 
-## Run Tests
+## Testing
 
 Test can be run in the root of the project or from the `tests` folder.  They cannot be run in `src` or its subfolders.
 
@@ -37,13 +37,30 @@ Test can be run in the root of the project or from the `tests` folder.  They can
   pytest
   ```
 
-## Run Static Analysis
+The file `pytest.ini` configures how `pytest` and `pytest-cov` handle testing.  Most options
+shouldn't need to be changed.  The `--cov-fail-under` option is set to `90` and should not be
+changed without team discussion.
+
+Marking code with `# pragma: no cover` will cause `pytest-cov` to exclude the code from 
+the coverage computation.  This should be used **sparingly**, and only after consultation
+with the team.
+
+
+## Static Analysis
 
 To check the source and tests for compiance to style guides:
 
   ```
   pylint src tests
   ```
+
+The file `pylintrc` contains configuration options for Pylint.  Changes to this
+file should only be done after consultation with the team.  This is especially
+true for the `disable` setting, which disables a check across the entire codebase.
+
+Marking code with `# pylint: disable=<some-message>` will disable the `<some message>` 
+rule for that code.  This should be used **sparkingly**, and only after consultation with
+the team.
 
 
 ## Manual Deploy on EC2
@@ -116,3 +133,29 @@ To check the source and tests for compiance to style guides:
   ```
 
   Verify with `sudo systemctl status flask.service`
+
+
+
+## CI/CD
+
+**CI**: Each time a developer pushes testing (with coverage) and static analysis are run automatically.
+The results are reported in the PR, and no PR should be merged if either fails.
+
+
+**CD**: After a PR is merged into `main` the changes can be deployed to the production server using
+a Github Action.  
+
+  * Click on "Actions" on the `upstream` repo
+  * Click on "Redeploy on AWS" in the list of Actions
+  * Click on the "Run Workflow" dropdown on the right and then on the "Run Workflow" button
+
+This action uses Github Secrets (in the "Actions and variable" secction)
+
+  * `HOSTNAME` contains the DNS name of the server
+  * `LABSUSERPEM` contains the text of the `labsuser.pem` file (i.e. the *private* half of the SSH key)
+
+This action will SSH to the server and run the `redeploy.sh` script.  This script will:
+
+  * Stop the `gunicorn` process with Systemd
+  * Perform a `git pull origin main` (NOTE: `origin` points to the upstream repo because development should *never* happen in prod)
+  * Start the `gunicorn` process with Systemd
