@@ -11,7 +11,7 @@ def create_app():
 
 def launch():
     return create_app()
-    
+
 
 def main():
     app = create_app()
