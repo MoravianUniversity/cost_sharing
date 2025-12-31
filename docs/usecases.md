@@ -31,7 +31,7 @@ This document outlines the complete list of use cases for the Cost Sharing appli
 3. User authenticates with Google
 4. System receives OAuth callback with authorization code
 5. System exchanges code for user information
-6. System matches OAuth provider ID to existing user account
+6. System matches email to existing user account
 7. System generates and returns JWT token
 8. User is logged in and can access the application
 
@@ -39,26 +39,7 @@ This document outlines the complete list of use cases for the Cost Sharing appli
 
 ---
 
-### UC-AUTH-003: Placeholder User Activation
-**Actor**: Placeholder User (invited but never logged in)  
-**Precondition**: User was added to a group as a placeholder (email/name only, no OAuth)  
-**Main Flow**:
-1. Placeholder user initiates Google OAuth login
-2. System receives OAuth callback with authorization code
-3. System exchanges code for user information
-4. System matches email from OAuth to existing placeholder account
-5. System activates placeholder account by:
-   - Setting `is_placeholder` to false
-   - Setting `oauth_provider_id` from OAuth
-   - Updating name if different from placeholder
-6. System generates and returns JWT token
-7. User is logged in and can access the application
-
-**Postcondition**: Placeholder account is activated, user is authenticated
-
----
-
-### UC-AUTH-004: Get Current User Information
+### UC-AUTH-003: Get Current User Information
 **Actor**: Authenticated User  
 **Precondition**: User has valid authentication token  
 **Main Flow**:
@@ -132,41 +113,25 @@ This document outlines the complete list of use cases for the Cost Sharing appli
 
 ---
 
-### UC-GROUP-005: Add Member to Group (Existing User)
+### UC-GROUP-005: Add Member to Group
 **Actor**: Authenticated User (must be group member)  
-**Precondition**: User is logged in, is a member of the group, and target user already has an account  
+**Precondition**: User is logged in and is a member of the group  
 **Main Flow**:
 1. User provides email and name of person to add
 2. System validates email format
 3. System checks if user with email already exists
-4. System checks if user is already a member of the group
-   - If user is already a member: System returns 409 Conflict with error message
-5. If not already a member, system adds user to group
-6. System returns member information and `isNewUser: false`
-
-**Postcondition**: Existing user is added as group member
-
----
-
-### UC-GROUP-006: Add Member to Group (New Placeholder User)
-**Actor**: Authenticated User (must be group member)  
-**Precondition**: User is logged in, is a member of the group, and target user does not have an account  
-**Main Flow**:
-1. User provides email and name of person to add
-2. System validates email format
-3. System checks if user with email exists
-4. If user does not exist, system creates placeholder account:
+4. If user does not exist, system creates new user account:
    - Email and name from input
-   - `is_placeholder` = true
-   - `oauth_provider_id` = NULL
-5. System adds placeholder user to group
-6. System returns member information and `isNewUser: true`
+5. System checks if user is already a member of the group
+   - If user is already a member: System returns 409 Conflict with error message
+6. If not already a member, system adds user to group
+7. System returns member information
 
-**Postcondition**: Placeholder user account is created and added as group member
+**Postcondition**: User (existing or newly created) is added as group member
 
 ---
 
-### UC-GROUP-007: Remove Member from Group (Self)
+### UC-GROUP-006: Remove Member from Group (Self)
 **Actor**: Authenticated User (removing themselves)  
 **Precondition**: User is logged in, is a member of the group, is not the creator, and is not involved in any expenses  
 **Main Flow**:
@@ -183,7 +148,7 @@ This document outlines the complete list of use cases for the Cost Sharing appli
 
 ---
 
-### UC-GROUP-008: Remove Member from Group (Other Member)
+### UC-GROUP-007: Remove Member from Group (Other Member)
 **Actor**: Authenticated User (removing another member)  
 **Precondition**: User is logged in, is a member of the group, target user is not the creator, and target user is not involved in any expenses  
 **Main Flow**:
