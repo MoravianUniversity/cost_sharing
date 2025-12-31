@@ -9,13 +9,13 @@ PRAGMA foreign_keys = ON;
 -- USERS
 -- ============================================================================
 
-INSERT INTO users (id, email, name, is_placeholder, oauth_provider_id) VALUES
-(1, 'alice@school.edu', 'Alice', 0, '123456789012345678901'),
-(2, 'bob@school.edu', 'Bob', 1, NULL),
-(3, 'charlie@school.edu', 'Charlie', 0, '987654321098765432109'),
-(4, 'david@school.edu', 'David', 0, '456789012345678901234'),
-(5, 'eve@school.edu', 'Eve', 0, '789012345678901234567'),
-(6, 'frank@school.edu', 'Frank', 1, NULL);
+INSERT INTO users (id, email, name) VALUES
+(1, 'alice@school.edu', 'Alice'),
+(2, 'bob@school.edu', 'Bob'),
+(3, 'charlie@school.edu', 'Charlie'),
+(4, 'david@school.edu', 'David'),
+(5, 'eve@school.edu', 'Eve'),
+(6, 'frank@school.edu', 'Frank');
 
 -- ============================================================================
 -- GROUPS
