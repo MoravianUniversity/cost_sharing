@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cost Sharing Demo</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Cost Sharing Demo</h1>
+        <div id="status" class="status logged-out">Loading...</div>
+        
+        <div id="login-section">
+            <button onclick="login()">Login with Google</button>
+        </div>
+        
+        <div id="user-section" class="hidden">
+            <div class="user-info">
+                <h2>User Information</h2>
+                <p><strong>ID:</strong> <span id="user-id">-</span></p>
+                <p><strong>Email:</strong> <span id="user-email">-</span></p>
+                <p><strong>Name:</strong> <span id="user-name">-</span></p>
+                <div class="token-display">
+                    <details>
+                        <summary>Show Token (for debugging)</summary>
+                        <code id="user-token">-</code>
+                    </details>
+                </div>
+            </div>
+            <button onclick="fetchUserInfo()">Refresh User Info</button>
+            <button class="logout" onclick="logout()">Logout</button>
+        </div>
+    </div>
+    <script src="/static/js/script.js"></script>
+</body>
+</html>
+

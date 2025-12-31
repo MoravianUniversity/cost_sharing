@@ -39,7 +39,7 @@ class OAuthHandler:
             google_client_secret: Google OAuth client secret
             jwt_secret: Secret key for JWT token signing
         """
-        self.redirect_uri = f"{base_url}/auth/callback"
+        self.redirect_uri = f"{base_url}/"
         self.google_client_id = google_client_id
         self.google_client_secret = google_client_secret
         self.jwt_secret = jwt_secret

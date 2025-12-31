@@ -29,6 +29,17 @@
   This will run `setup.py` to create a `cost_sharing` package
 
 
+## Running the Application
+
+From the project root directory (where `setup.py` is located):
+
+```bash
+python -m cost_sharing.app
+```
+
+The app will start on `http://localhost:8000`
+
+
 ## Testing
 
 Test can be run in the root of the project or from the `tests` folder.  They cannot be run in `src` or its subfolders.

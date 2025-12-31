@@ -121,4 +121,4 @@ def test_redirect_uri_computed_from_base_url():
         jwt_secret="test-jwt-secret"
     )
 
-    assert test_handler.redirect_uri == "https://example.com/auth/callback"
+    assert test_handler.redirect_uri == "https://example.com/"
