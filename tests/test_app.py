@@ -2,7 +2,11 @@ import pytest
 from oauth_handler_mock import OAuthHandlerMock
 from cost_sharing_mock import CostSharingMock
 from cost_sharing.app import create_app
-from cost_sharing.oauth_handler import OAuthCodeError, OAuthVerificationError
+from cost_sharing.oauth_handler import (
+    OAuthCodeError, OAuthVerificationError,
+    TokenExpiredError, TokenInvalidError
+)
+from cost_sharing.exceptions import UserNotFoundError
 
 
 @pytest.fixture(name='client')
@@ -98,3 +102,96 @@ def test_auth_callback_verification_error(configured_client, oauth_handler):
     data = response.get_json()
     assert data['error'] == "Unauthorized"
     assert data['message'] == "OAuth verification failed"
+
+
+def test_auth_me_success(configured_client, oauth_handler, application):
+    """Test successful /auth/me request."""
+    # Configure mocks
+    oauth_handler.validate_token_returns(1)
+    application.get_user_by_id_returns(1, "test@example.com", "Test User")
+
+    # Make request with Authorization header
+    response = configured_client.get(
+        '/auth/me',
+        headers={'Authorization': 'Bearer valid-token-123'}
+    )
+
+    # Verify response
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['id'] == 1
+    assert data['email'] == "test@example.com"
+    assert data['name'] == "Test User"
+
+
+def test_auth_me_missing_header(configured_client):
+    """Test /auth/me with missing Authorization header."""
+    response = configured_client.get('/auth/me')
+
+    assert response.status_code == 401
+    data = response.get_json()
+    assert data['error'] == "Unauthorized"
+    assert data['message'] == "Authentication required"
+
+
+def test_auth_me_invalid_header_format(configured_client):
+    """Test /auth/me with invalid Authorization header format."""
+    # Missing "Bearer " prefix
+    response = configured_client.get(
+        '/auth/me',
+        headers={'Authorization': 'invalid-token-123'}
+    )
+
+    assert response.status_code == 401
+    data = response.get_json()
+    assert data['error'] == "Unauthorized"
+    assert data['message'] == "Authentication required"
+
+
+def test_auth_me_expired_token(configured_client, oauth_handler):
+    """Test /auth/me with expired token."""
+    # Configure mock to raise TokenExpiredError
+    oauth_handler.validate_token_raises(TokenExpiredError("Token expired"))
+
+    response = configured_client.get(
+        '/auth/me',
+        headers={'Authorization': 'Bearer expired-token'}
+    )
+
+    assert response.status_code == 401
+    data = response.get_json()
+    assert data['error'] == "Unauthorized"
+    assert data['message'] == "Authentication required"
+
+
+def test_auth_me_invalid_token(configured_client, oauth_handler):
+    """Test /auth/me with invalid token."""
+    # Configure mock to raise TokenInvalidError
+    oauth_handler.validate_token_raises(TokenInvalidError("Invalid token"))
+
+    response = configured_client.get(
+        '/auth/me',
+        headers={'Authorization': 'Bearer invalid-token'}
+    )
+
+    assert response.status_code == 401
+    data = response.get_json()
+    assert data['error'] == "Unauthorized"
+    assert data['message'] == "Authentication required"
+
+
+def test_auth_me_user_not_found(configured_client, oauth_handler, application):
+    """Test /auth/me when user doesn't exist."""
+    # Configure mocks
+    oauth_handler.validate_token_returns(999)  # Valid token but user doesn't exist
+    application.get_user_by_id_raises(UserNotFoundError("User not found"))
+
+    response = configured_client.get(
+        '/auth/me',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert response.status_code == 404
+    data = response.get_json()
+    assert data['error'] == "Resource not found"
+    assert data['message'] == "User not found"
