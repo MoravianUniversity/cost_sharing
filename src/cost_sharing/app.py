@@ -1,7 +1,7 @@
 import os
 import sys
 import functools
-from flask import Flask, request, jsonify, g
+from flask import Flask, request, jsonify, g, render_template
 from dotenv import load_dotenv
 from cost_sharing.oauth_handler import (
     OAuthHandler, OAuthCodeError, OAuthVerificationError,
@@ -72,15 +72,35 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915
 
     @app.route('/')
     def index():
-        return "Hello, World!"
+        """Serve the demo page."""
+        return render_template('index.html')
+
+    @app.route('/auth/login', methods=['GET'])
+    def auth_login():
+        """
+        Get Google OAuth authorization URL.
+
+        Returns the URL that the frontend should redirect to for Google OAuth login.
+        """
+        try:
+            authorization_url, state = oauth_handler.get_authorization_url()
+            return jsonify({
+                "url": authorization_url,
+                "state": state
+            }), 200
+        except Exception as e:
+            return jsonify({
+                "error": "Internal server error",
+                "message": "Failed to generate authorization URL"
+            }), 500
 
     @app.route('/auth/callback', methods=['GET'])
     def auth_callback():
         """
         Handle OAuth callback from Google.
 
-        Extracts the authorization code, exchanges it for user info, creates/gets user,
-        and returns a JWT token along with user information.
+        Exchanges authorization code for user info, creates/gets user, and returns JWT token.
+        Called by JavaScript fetch after Google redirects to main page with code.
         """
         # Extract code from query parameters
         code = request.args.get('code')
@@ -102,7 +122,7 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915
             # Create JWT token for the user
             token = oauth_handler.create_jwt_token(user.id)
 
-            # Return token and user information
+            # Return token and user information as JSON
             return jsonify({
                 "token": token,
                 "user": {

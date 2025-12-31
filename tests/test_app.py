@@ -40,10 +40,13 @@ def create_configured_client(oauth_handler, application):
 
 
 def test_index(client):
-    """Test that index route returns Hello, World!"""
+    """Test that index route returns the demo page HTML."""
     response = client.get('/')
     assert response.status_code == 200
-    assert response.data.decode('utf-8') == "Hello, World!"
+    html = response.data.decode('utf-8')
+    assert 'Cost Sharing Demo' in html
+    assert 'style.css' in html
+    assert 'script.js' in html
 
 
 def test_auth_callback_success(configured_client, oauth_handler, application):
@@ -195,3 +198,16 @@ def test_auth_me_user_not_found(configured_client, oauth_handler, application):
     data = response.get_json()
     assert data['error'] == "Resource not found"
     assert data['message'] == "User not found"
+
+
+def test_auth_login_success(configured_client, oauth_handler):
+    """Test /auth/login returns authorization URL."""
+    # OAuthHandlerMock.get_authorization_url() returns dummy values
+    response = configured_client.get('/auth/login')
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert 'url' in data
+    assert 'state' in data
+    assert data['url'] == "https://accounts.google.com/o/oauth2/auth?dummy=true"
+    assert data['state'] == "dummy-state-123"
