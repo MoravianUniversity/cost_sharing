@@ -1,16 +1,16 @@
-"""Stub implementation of OAuthHandler for testing"""
+"""Mock implementation of OAuthHandler for testing"""
 
-class OAuthHandlerStub:
+class OAuthHandlerMock:
     """
-    Stub implementation of OAuthHandler for testing.
+    Mock implementation of OAuthHandler for testing.
 
-    This stub allows you to configure behavior for testing different scenarios.
+    This mock allows you to configure behavior for testing different scenarios.
     Use the configuration methods to set up the desired behavior before passing
-    the stub to create_app().
+    the mock to create_app().
     """
 
     def __init__(self):
-        """Initialize the stub."""
+        """Initialize the mock."""
         # Configuration for exchange_code_for_user_info
         self._exchange_code_result = None
         self._exchange_code_exception = None
@@ -62,7 +62,7 @@ class OAuthHandlerStub:
 
     def get_authorization_url(self):
         """
-        Get Google OAuth authorization URL (stub implementation).
+        Get Google OAuth authorization URL (mock implementation).
 
         Returns:
             Tuple of (authorization_url, state) with dummy values
@@ -71,7 +71,7 @@ class OAuthHandlerStub:
 
     def exchange_code_for_user_info(self, oauth_code):  # pylint: disable=W0613
         """
-        Exchange OAuth authorization code for user information (stub implementation).
+        Exchange OAuth authorization code for user information (mock implementation).
 
         Args:
             oauth_code: Authorization code (ignored, uses configured behavior)
@@ -94,11 +94,11 @@ class OAuthHandlerStub:
 
     def create_jwt_token(self, user_id, expiration_days=7):  # pylint: disable=W0613
         """
-        Create a JWT token for authenticated user (stub implementation).
+        Create a JWT token for authenticated user (mock implementation).
 
         Args:
             user_id: User ID to encode in token
-            expiration_days: Number of days until token expires (ignored in stub)
+            expiration_days: Number of days until token expires (ignored in mock)
 
         Returns:
             Dummy JWT token string
@@ -107,7 +107,7 @@ class OAuthHandlerStub:
 
     def validate_jwt_token(self, token):  # pylint: disable=W0613
         """
-        Validate JWT token and extract user ID (stub implementation).
+        Validate JWT token and extract user ID (mock implementation).
 
         Args:
             token: JWT token string (ignored, uses configured behavior)
