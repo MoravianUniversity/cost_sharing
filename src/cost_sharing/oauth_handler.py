@@ -99,7 +99,7 @@ class OAuthHandler:
             oauth_code: Authorization code from Google OAuth callback
 
         Returns:
-            Dict with keys: email, name, oauth_provider_id
+            Dict with keys: email, name
 
         Raises:
             OAuthCodeError: If authorization code is invalid or expired
@@ -123,15 +123,14 @@ class OAuthHandler:
 
             # Extract required fields from verified token
             # These should always be present in a valid Google ID token
-            if 'email' not in id_info or 'name' not in id_info or 'sub' not in id_info:
+            if 'email' not in id_info or 'name' not in id_info:
                 raise OAuthVerificationError(
-                    "Token missing required fields (email, name, or sub)"
+                    "Token missing required fields (email or name)"
                 )
 
             return {
                 "email": id_info['email'],
-                "name": id_info['name'],
-                "oauth_provider_id": id_info['sub']  # Google's unique user ID
+                "name": id_info['name']
             }
         except oauth2_errors.OAuth2Error as e:
             raise OAuthCodeError(f"Invalid or expired authorization code: {str(e)}") from e

@@ -1,7 +1,10 @@
 """In-memory storage implementation for testing and mocking"""
 
 from cost_sharing.models import User
-from cost_sharing.exceptions import DuplicateEmailError, DuplicateOAuthProviderIdError
+from cost_sharing.exceptions import (
+    DuplicateEmailError,
+    UserNotFoundError
+)
 
 
 class InMemoryCostStorage:
@@ -17,56 +20,65 @@ class InMemoryCostStorage:
         self._users = {}
         self._next_id = 1
         self._email_index = {}
-        self._oauth_provider_id_index = {}
 
-    def find_user_by_oauth_provider_id(self, oauth_provider_id):
+    def is_user(self, email):
         """
-        Find user by OAuth provider ID.
+        Check if a user exists with the given email.
 
         Args:
-            oauth_provider_id: OAuth provider's unique user ID (Google's 'sub')
+            email: User's email address
 
         Returns:
-            User if found, None otherwise
+            bool: True if user exists, False otherwise
         """
-        return self._oauth_provider_id_index.get(oauth_provider_id)
+        return email in self._email_index
 
-    def create_user(self, email, name, oauth_provider_id):
+    def get_user_by_email(self, email):
+        """
+        Get user by email address.
+
+        Args:
+            email: User's email address
+
+        Returns:
+            User if found
+
+        Raises:
+            UserNotFoundError: If user with the given email is not found
+        """
+        user = self._email_index.get(email)
+        if user is None:
+            raise UserNotFoundError(f"User with email '{email}' not found")
+        return user
+
+    def create_user(self, email, name):
         """
         Create a new user.
 
         Args:
             email: User's email address
             name: User's name
-            oauth_provider_id: OAuth provider's unique user ID (Google's 'sub')
 
         Returns:
             Newly created User object
 
         Raises:
             DuplicateEmailError: If email already exists
-            DuplicateOAuthProviderIdError: If oauth_provider_id already exists
         """
         # Check for duplicate email
         if email in self._email_index:
             raise DuplicateEmailError()
 
-        # Check for duplicate oauth_provider_id
-        if oauth_provider_id in self._oauth_provider_id_index:
-            raise DuplicateOAuthProviderIdError()
-
         # Create user with auto-incremented ID
         user = User(
             id=self._next_id,
             email=email,
-            name=name,
-            oauth_provider_id=oauth_provider_id
+            name=name
         )
 
         # Store in all indices
         self._users[user.id] = user
         self._email_index[email] = user
-        self._oauth_provider_id_index[oauth_provider_id] = user
 
         # Increment next ID
         self._next_id += 1
@@ -81,6 +93,12 @@ class InMemoryCostStorage:
             user_id: User ID
 
         Returns:
-            User if found, None otherwise
+            User if found
+
+        Raises:
+            UserNotFoundError: If user with the given ID is not found
         """
-        return self._users.get(user_id)
+        user = self._users.get(user_id)
+        if user is None:
+            raise UserNotFoundError(f"User with ID {user_id} not found")
+        return user

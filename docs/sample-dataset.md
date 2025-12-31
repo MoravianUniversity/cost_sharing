@@ -5,36 +5,31 @@ This document provides example data for a collection of users in three different
 
 ## Users
 
-In addition to a name, email address (which must be unique), and list of groups, each user has:
+Each user has a name, email address (which must be unique), and list of groups.
 
-- **Placeholder Account**: This flag indicates whether the user has never logged in (T = placeholder, F = active user who has logged in).
-- **OAuth Provider ID**: This value is provided by Google OAuth to identify the user (it is `NULL` for placeholder accounts who never logged in).
-
-
-
-| Name | Email | Placeholder Account | OAuth Provider ID | Group Membership |
-|------|-------|---------|-------------------|------------------|
-| Alice | alice@school.edu | F | `123456789012345678901` | Group 1 (creator), Group 2 |
-| Bob | bob@school.edu | T | NULL | Group 1 |
-| Charlie | charlie@school.edu | F | `987654321098765432109` | Group 2 (creator) |
-| David | david@school.edu | F | `456789012345678901234` | Group 2 |
-| Eve | eve@school.edu | F | `789012345678901234567` | Group 3 (creator) |
-| Frank | frank@school.edu | T | NULL | Group 3 |
+| Name | Email | Group Membership |
+|------|-------|------------------|
+| Alice | alice@school.edu | Group 1 (creator), Group 2 |
+| Bob | bob@school.edu | Group 1 |
+| Charlie | charlie@school.edu | Group 2 (creator) |
+| David | david@school.edu | Group 2 |
+| Eve | eve@school.edu | Group 3 (creator) |
+| Frank | frank@school.edu | Group 3 |
 
 
 ---
 
-## Group 1: Empty Group with Placeholder Member
+## Group 1: Empty Group
 
-This group is made up of two users, one of which has never logged in.  There are no expenses associated with the group.
+This group is made up of two users. There are no expenses associated with the group.
 
 
 - **Name**: "Weekend Trip Planning"
 - **Description**: "Planning expenses for upcoming weekend getaway"
 - **Creator**: Alice (User ID: 1)
 - **Members**:
-  - Alice (User ID: 1) - Active user, group creator
-  - Bob (User ID: 2) - Placeholder user (hasn't logged in yet)
+  - Alice (User ID: 1) - Group creator
+  - Bob (User ID: 2)
 
 ### Expenses
 
@@ -61,7 +56,7 @@ are combined when balances are computed.
 - **Name**: "Roommates Spring 2025"
 - **Description**: "Shared expenses for apartment 4B"
 - **Creator**: Charlie (User ID: 3)
-- **Members** (all active, non-placeholder):
+- **Members**:
   - Charlie (User ID: 3) - Group creator
   - Alice (User ID: 1) - Also a member of Group 1 (cross-group membership)
   - David (User ID: 4)
@@ -122,17 +117,17 @@ are combined when balances are computed.
 
 ---
 
-## Group 3: Group with Placeholder Member and Expense
+## Group 3: Group with Expense
 
-This group has two members, one of which has never logged in.  The creator of the group has already added an expense.
+This group has two members. The creator of the group has already added an expense.
 
 ### Group Details
 - **Name**: "Project Team Expenses"
 - **Description**: "Team project collaboration costs"
 - **Creator**: Eve (User ID: 5)
 - **Members**:
-  - Eve (User ID: 5) - Active user, group creator
-  - Frank (User ID: 6) - Placeholder user (hasn't logged in yet)
+  - Eve (User ID: 5) - Group creator
+  - Frank (User ID: 6)
 
 ### Expenses
 
