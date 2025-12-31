@@ -223,7 +223,7 @@ paths:
       tags:
         - Groups
       summary: Add member to group
-      description: Adds a member to the group by email. Creates placeholder account if user hasn't logged in yet. When a placeholder user logs in for the first time via OAuth, their account is activated with the email and name from OAuth. Caller must be a member of the group.
+      description: Adds a member to the group by email. Creates user account if user doesn't exist yet. Caller must be a member of the group.
       parameters:
         - $ref: '#/components/parameters/GroupId'
       requestBody:
@@ -253,9 +253,6 @@ paths:
                 properties:
                   member:
                     $ref: '#/components/schemas/User'
-                  isNewUser:
-                    type: boolean
-                    description: True if a placeholder account was created
         '400':
           description: Validation error
           content:
@@ -299,7 +296,7 @@ paths:
       tags:
         - Groups
       summary: Remove member from group
-      description: Removes a member from the group. Users can remove themselves, or any member can remove others. A member cannot be removed if they are the group creator or if they are involved in any expenses (either as paidBy or in splitBetween for any expense in the group).
+      description: Removes a member from the group. A member can remove themselves, or the group creator can remove any member. A member cannot be removed if they are involved in any expenses (either as paidBy or in splitBetween for any expense in the group).
       parameters:
         - $ref: '#/components/parameters/GroupId'
         - name: userId
@@ -325,17 +322,17 @@ paths:
                 error: "Resource not found"
                 message: "User not found"
         '409':
-          description: Cannot remove member. Either the member is the group creator, or the member is involved in expenses (either as paidBy or in splitBetween for at least one expense in the group).
+          description: Cannot remove member. Either the authenticated user is not removing themselves and is not the group creator, or the member is involved in expenses (either as paidBy or in splitBetween for at least one expense in the group).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               examples:
-                creator:
-                  summary: Cannot remove group creator
+                not_authorized:
+                  summary: Cannot remove member - must be removing yourself or be the group creator
                   value:
                     error: "Conflict"
-                    message: "Cannot remove group creator"
+                    message: "You can only remove yourself, or you must be the group creator to remove other members"
                 involved_in_expenses:
                   summary: Cannot remove member involved in expenses
                   value:
