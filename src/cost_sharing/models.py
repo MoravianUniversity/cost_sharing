@@ -9,4 +9,3 @@ class User:
     id: int
     email: str
     name: str
-    oauth_provider_id: str

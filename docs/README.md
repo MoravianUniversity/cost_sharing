@@ -15,7 +15,7 @@ The Cost Sharing application helps groups of people (roommates, friends, project
 
 ### User Management
 - **Google OAuth Authentication**: Users log in with their Google account
-- **Placeholder Accounts**: Invite people to groups before they create an account - they'll be activated when they first log in
+- **Flexible User Creation**: Users can be added to groups before they log in - accounts are created as needed
 - **Multi-Group Membership**: Users can belong to multiple groups simultaneously
 
 ### Expense Splitting
