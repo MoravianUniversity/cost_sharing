@@ -200,7 +200,7 @@ def test_auth_me_user_not_found(configured_client, oauth_handler, application):
     assert data['message'] == "User not found"
 
 
-def test_auth_login_success(configured_client, oauth_handler):
+def test_auth_login_success(configured_client):
     """Test /auth/login returns authorization URL."""
     # OAuthHandlerMock.get_authorization_url() returns dummy values
     response = configured_client.get('/auth/login')

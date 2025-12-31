@@ -82,17 +82,11 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915
 
         Returns the URL that the frontend should redirect to for Google OAuth login.
         """
-        try:
-            authorization_url, state = oauth_handler.get_authorization_url()
-            return jsonify({
-                "url": authorization_url,
-                "state": state
-            }), 200
-        except Exception as e:
-            return jsonify({
-                "error": "Internal server error",
-                "message": "Failed to generate authorization URL"
-            }), 500
+        authorization_url, state = oauth_handler.get_authorization_url()
+        return jsonify({
+            "url": authorization_url,
+            "state": state
+        }), 200
 
     @app.route('/auth/callback', methods=['GET'])
     def auth_callback():
