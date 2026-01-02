@@ -296,7 +296,7 @@ paths:
       tags:
         - Groups
       summary: Remove member from group
-      description: Removes a member from the group. A member can remove themselves, or the group creator can remove any member. A member cannot be removed if they are involved in any expenses (either as paidBy or in splitBetween for any expense in the group).
+      description: Removes a member from the group. A member can remove themselves, the group creator can remove any member except themselves. A member cannot be removed if they are involved in any expenses (either as paidBy or in splitBetween for any expense in the group).
       parameters:
         - $ref: '#/components/parameters/GroupId'
         - name: userId

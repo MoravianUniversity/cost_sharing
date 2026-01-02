@@ -1,172 +1,112 @@
 
+## Overview
 
-## Dev Setup
-
-* Create a virtual environment
-
-  ```
-  python3 -m venv .venv
-  ```
-
-* Activate the environment
-
-  ```
-  source .venv/bin/activate
-  ```
-
-* Install required packages
-
-  ```
-  pip install -r requirements.txt
-  ```
-
-* Install the system as a editable package (changes to code will be seen)  
-
-  ```
-  pip install -e .
-  ```
-
-  This will run `setup.py` to create a `cost_sharing` package
+The Cost Sharing application helps groups of people (roommates, friends, project teams, etc.) track shared expenses and determine how much each person owes. When someone pays for a shared expense, the system splits the cost among specified participants and maintains running balances for the group.
 
 
-## Running the Application
+## Example: Roommates Sharing Expenses
 
-From the project root directory (where `setup.py` is located):
+The example is taken from the [Sample Dataset](docs/sample-dataset.md).
 
-```bash
-python -m cost_sharing.app
-```
+### The Group: "Roommates Spring 2025"
 
-The app will start on `http://localhost:8000`
+**Members:**
+- Charlie (group creator)
+- Alice
+- David
 
+### The Expenses
 
-## Testing
+1. **Grocery shopping** (Jan 10, 2025)
+   - Paid by: Charlie
+   - Split between: Charlie & Alice
+   - Amount: $86.40
+   - Per person: $43.20
 
-Test can be run in the root of the project or from the `tests` folder.  They cannot be run in `src` or its subfolders.
+2. **Utilities bill** (Jan 15, 2025)
+   - Paid by: Alice
+   - Split between: Charlie & Alice
+   - Amount: $120.00
+   - Per person: $60.00
 
-  ```
-  pytest
-  ```
+3. **Restaurant dinner** (Jan 20, 2025)
+   - Paid by: David
+   - Split between: Alice & David
+   - Amount: $67.89
+   - Per person: $33.95
 
-The file `pytest.ini` configures how `pytest` and `pytest-cov` handle testing.  Most options
-shouldn't need to be changed.  The `--cov-fail-under` option is set to `90` and should not be
-changed without team discussion.
+4. **Internet bill** (Jan 25, 2025)
+   - Paid by: Alice
+   - Split between: Charlie, Alice & David (all three roommates)
+   - Amount: $100.00
+   - Per person: $33.33
 
-Marking code with `# pragma: no cover` will cause `pytest-cov` to exclude the code from 
-the coverage computation.  This should be used **sparingly**, and only after consultation
-with the team.
+### The Balances
 
+After all expenses are recorded, the system calculates:
 
-## Static Analysis
+**Charlie:**
+- Total paid: $86.40
+- Total owed: $136.53 (his share of expenses #1, #2, and #4)
+- **Net balance: -$50.13** (Charlie owes $50.13)
 
-To check the source and tests for compiance to style guides:
+**Alice:**
+- Total paid: $220.00 (expenses #2 and #4)
+- Total owed: $170.48 (her share of all four expenses)
+- **Net balance: +$49.52** (Alice is owed $49.52)
 
-  ```
-  pylint src tests
-  ```
-
-The file `pylintrc` contains configuration options for Pylint.  Changes to this
-file should only be done after consultation with the team.  This is especially
-true for the `disable` setting, which disables a check across the entire codebase.
-
-Marking code with `# pylint: disable=<some-message>` will disable the `<some message>` 
-rule for that code.  This should be used **sparkingly**, and only after consultation with
-the team.
-
-
-## Manual Deploy on EC2
-
-* Create an EC2 Instance
-  * t3.micro
-  * Use `labsuser.pem`
-  * Enable port 443
-* SSH to instance
-
-  ```
-  ssh -i ~/.ssh/labsuser.pem ec2-user@<instance IP>
-  ```
-
-* Install `git`
-
-  ```
-  sudo yum install -y git
-  ```
-
-* Clone repo
-
-  ```
-  git clone <repo url>
-  ```
-
-* In repo, create `.venv` and install libraries
-
-  ```
-  cd cost_sharing
-  python3 -m venv .venv
-  .venv/bin/pip install -r requirements.txt
-  .venv/bin/pip install -e .
-  ```
-
-* Add credentials to `.env` for subdomain registration
-
-  ```
-  USERNAME=<username>
-  TOKEN=<token>
-  LABEL=costsharing
-  ```
-
-  This step used the [AWS DNS Subdomain System](https://webapps.cs.moravian.edu/awsdns/).
-
-* Register your subdomain
-
-  ```
-  ./register_ip.sh
-  ```
-
-* Create SSL certificates (commands from the [Let's Encrypt Setup](https://certbot.eff.org/instructions?ws=other&os=pip))
-
-  ```
-  sudo python3 -m venv /opt/certbot/
-  sudo /opt/certbot/bin/pip install --upgrade pip
-  sudo /opt/certbot/bin/pip install certbot certbot
-  sudo ln -s /opt/certbot/bin/certbot /usr/bin/certbot
-  sudo certbot certonly --standalone
-  ```
-
-  When prompted, use the subdomain `<username>costsharing.moraviancs.click`
-
-* Configure app to launch with Systemd
-
-  ```
-  sudo cp flask.service /etc/systemd/system
-  sudo systemctl enable flask.service
-  sudo systemctl start flask.service
-  ```
-
-  Verify with `sudo systemctl status flask.service`
+**David:**
+- Total paid: $67.89
+- Total owed: $67.28 (his share of expenses #3 and #4)
+- **Net balance: +$0.61** (David is owed $0.61)
 
 
-
-## CI/CD
-
-**CI**: Each time a developer pushes testing (with coverage) and static analysis are run automatically.
-The results are reported in the PR, and no PR should be merged if either fails.
+**Note on Rounding**: Notice that the Internet bill ($100.00 split 3 ways) results in $33.33 per person, which sums to $99.99 (not $100.00). This $0.01 rounding discrepancy is handled automatically - Alice paid the full $100.00, but only $99.99 is owed by participants, so the system accounts for this correctly in the final balances.
 
 
-**CD**: After a PR is merged into `main` the changes can be deployed to the production server using
-a Github Action.  
+## Important System Features
 
-  * Click on "Actions" on the `upstream` repo
-  * Click on "Redeploy on AWS" in the list of Actions
-  * Click on the "Run Workflow" dropdown on the right and then on the "Run Workflow" button
+### Core Functionality
+- **Group Management**: Users can create groups and invite members (even if they haven't signed up yet)
+- **Expense Tracking**: Users record expenses with description, amount, date, and who the expense is split between
+- **Automatic Balance Calculation**: The system calculates who owes whom based on all expenses
+- **Payer Ownership**: Only the person who paid for an expense can modify or delete it
 
-This action uses Github Secrets (in the "Actions and variable" secction)
+### User Management
+- **Google OAuth Authentication**: Users log in with their Google account
+- **Flexible User Creation**: Users can be added to groups before they log in - accounts are created as needed
+- **Multi-Group Membership**: Users can belong to multiple groups simultaneously
 
-  * `HOSTNAME` contains the DNS name of the server
-  * `LABSUSERPEM` contains the text of the `labsuser.pem` file (i.e. the *private* half of the SSH key)
+### Expense Splitting
+- **Equal Splitting**: Expenses are split equally among specified participants
+- **Flexible Participation**: Not all group members need to be included in every expense
+- **Rounding Handling**: System handles currency rounding (rounds to 2 decimal places, with small discrepancies possible)
 
-This action will SSH to the server and run the `redeploy.sh` script.  This script will:
+### Security & Permissions
+- **Group-Based Access**: Only group members can view details of the group or add expenses to a group
+- **Payer-Only Modification**: Only the person who paid can edit or delete their expenses
+- **Member Protection**: A member can remove themselves from a group, and a creator can remove other members - but no member can be removed if they are involved in expenses.  Also, group creators cannot be removed.
 
-  * Stop the `gunicorn` process with Systemd
-  * Perform a `git pull origin main` (NOTE: `origin` points to the upstream repo because development should *never* happen in prod)
-  * Start the `gunicorn` process with Systemd
+
+## System Architecture
+
+The system is organized as a three-tier architecture:
+
+- **Database Layer**:  
+  Uses an SQLite database for persistent storage. All group data, users, expenses, and transactions are saved in SQLite tables. The schema is designed to enforce data integrity via constraints, foreign keys, and validation rules.
+
+- **Backend/API Layer**:  
+  Uses Flask to provide a RESTful API that handles authentication (Google OAuth), authorization (permissions, group membership), business logic (expense splitting, rounding, balance calculations), and data validation.
+
+- **Frontend Layer**:  
+  Uses HTML, CSS, and JavaScript to provide a user interface.  The frontend allows users to log in, view and manage groups, add/edit expenses, and review balances in real time, with dynamic updates and validations handled in the browser.  It communicates with the Flask API via AJAX/fetch requests.
+
+
+## Documentation
+
+* [docs/usecases.md](docs/usecases.md) contains detailed use cases of the business logic for the system
+* [docs/dev.md](docs/dev.md) contains directions to set up dev/prod environments.
+* [docs/sample-dataset.md](docs/sample-dataset.md) contains data and discussion for some sample groups
+* [docs/schema-sqlite.sql](docs/schema-sqlite.sql) contains schema for all database tables
+* [docs/sample-data.sql](docs/sample-data.sql) contains the sample dataset in SQL format
+* [docs/api.yaml](docs/api.yaml) contains an OpenAPI specification of all API endpoints.
