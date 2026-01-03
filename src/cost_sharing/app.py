@@ -190,7 +190,8 @@ def launch():  # pragma: no cover
         jwt_secret=os.getenv('JWT_SECRET')
     )
 
-    db_conn = sqlite3.connect('database/costsharing.db')
+    # check_same_thread=False is necessary to allow multiple threads to access the database concurrently
+    db_conn = sqlite3.connect('database/costsharing.db', check_same_thread=False)
     db_storage = DatabaseCostStorage(db_conn)
 
     return create_app(oauth_handler, CostSharing(db_storage))
