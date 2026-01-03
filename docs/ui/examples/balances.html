@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cost Sharing - Balances</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav>
+        <h1>Cost Sharing</h1>
+        <div class="nav-links">
+            <a href="#">My Groups</a>
+            <span class="user-name">Alice</span>
+            <button class="logout small">Logout</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="group-header">
+            <div>
+                <h2>Roommates Spring 2025</h2>
+                <p class="group-description">Shared expenses for apartment 4B</p>
+            </div>
+            <div class="group-actions">
+                <button>Add Expense</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab">Members</button>
+            <button class="tab">Expenses</button>
+            <button class="tab active">Balances</button>
+        </div>
+
+        <div class="tab-content">
+            <h3>Group Members</h3>
+            <p>Manage members of this group.</p>
+        </div>
+
+        <div class="tab-content">
+            <h3>Expenses</h3>
+            <p>View and manage expenses for this group.</p>
+        </div>
+
+        <div class="tab-content active">
+            <h3>Balances</h3>
+            <p>Current balances showing who owes whom in this group.</p>
+
+            <table style="margin-top: 20px;">
+                <thead>
+                    <tr>
+                        <th>Person</th>
+                        <th style="text-align: right;">Paid</th>
+                        <th style="text-align: right;">Share of Expenses</th>
+                        <th style="text-align: right;">Net Balance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <div style="font-weight: 600; color: #333;">Alice</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="expense-amount" style="margin: 0;">$220.00</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="expense-amount" style="margin: 0; color: #28a745; font-weight: 600;">$170.48</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="expense-amount" style="margin: 0; color: #28a745; font-weight: 600;">+$49.52</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div style="font-weight: 600; color: #333;">Charlie</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="expense-amount" style="margin: 0;">$86.40</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="expense-amount" style="margin: 0; color: #28a745; font-weight: 600;">$136.53</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="expense-amount" style="margin: 0; color: #dc3545; font-weight: 600;">-$50.13</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div style="font-weight: 600; color: #333;">David</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="expense-amount" style="margin: 0;">$67.89</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="expense-amount" style="margin: 0; color: #28a745; font-weight: 600;">$67.28</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="expense-amount" style="margin: 0; color: #28a745; font-weight: 600;">+$0.61</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div style="margin-top: 30px;">
+                <h3>Who Owes Whom</h3>
+                <p style="color: #6c757d; margin-bottom: 15px;">These are the amounts that need to be paid to settle all debts.</p>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>From</th>
+                            <th>To</th>
+                            <th style="text-align: right;">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Charlie</td>
+                            <td>Alice</td>
+                            <td style="text-align: right;">
+                                <div class="expense-amount" style="margin: 0; color: #dc3545; font-weight: 600;">$50.13</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>David</td>
+                            <td>Alice</td>
+                            <td style="text-align: right;">
+                                <div class="expense-amount" style="margin: 0; color: #dc3545; font-weight: 600;">$0.61</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+

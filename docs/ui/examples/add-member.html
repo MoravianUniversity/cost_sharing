@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cost Sharing - Add Member</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav>
+        <h1>Cost Sharing</h1>
+        <div class="nav-links">
+            <a href="#">My Groups</a>
+            <span class="user-name">Alice</span>
+            <button class="logout small">Logout</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="group-header">
+            <div>
+                <h2>Roommates Spring 2025</h2>
+                <p class="group-description">Shared expenses for apartment 4B</p>
+            </div>
+            <div class="group-actions">
+                <button>Add Expense</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active">Members</button>
+            <button class="tab">Expenses</button>
+            <button class="tab">Balances</button>
+        </div>
+
+        <div class="tab-content active">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                <div>
+                    <h3>Group Members</h3>
+                    <p style="margin: 0;">Manage members of this group.</p>
+                </div>
+                <div>
+                    <button>Add Member</button>
+                </div>
+            </div>
+            
+            <div class="members-list">
+                <div class="member-item">
+                    <div class="member-info">
+                        <div class="member-name">Charlie <span class="member-badge">Creator</span></div>
+                        <div class="member-email">charlie@school.edu</div>
+                    </div>
+                </div>
+                
+                <div class="member-item">
+                    <div class="member-info">
+                        <div class="member-name">Alice</div>
+                        <div class="member-email">alice@school.edu</div>
+                    </div>
+                    <span title="Cannot remove member who is involved in expenses">
+                        <button class="danger small" disabled>Remove</button>
+                    </span>
+                </div>
+                
+                <div class="member-item">
+                    <div class="member-info">
+                        <div class="member-name">David</div>
+                        <div class="member-email">david@school.edu</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content">
+            <h3>Expenses</h3>
+            <p>View and manage expenses for this group.</p>
+        </div>
+
+        <div class="tab-content">
+            <h3>Balances</h3>
+            <p>Current balances for this group.</p>
+        </div>
+    </div>
+
+    <!-- Modal Overlay -->
+    <div class="modal-overlay active">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Add Member</h2>
+                <button class="modal-close">×</button>
+            </div>
+            
+            <form>
+                <div class="form-group">
+                    <label for="member-email">Email <span class="required">*</span></label>
+                    <input type="email" id="member-email" name="email" required placeholder="user@example.com">
+                    <small class="form-help">Required. A user account will be created if it doesn't exist.</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="member-name">Name <span class="required">*</span></label>
+                    <input type="text" id="member-name" name="name" required placeholder="Full Name">
+                    <small class="form-help">Required. The member's full name.</small>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="secondary">Cancel</button>
+                    <button type="submit">Add Member</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
+

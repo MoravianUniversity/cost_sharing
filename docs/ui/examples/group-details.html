@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cost Sharing - Roommates Spring 2025</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav>
+        <h1>Cost Sharing</h1>
+        <div class="nav-links">
+            <a href="#">My Groups</a>
+            <span class="user-name">Alice</span>
+            <button class="logout small">Logout</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="group-header">
+            <div>
+                <h2>Roommates Spring 2025</h2>
+                <p class="group-description">Shared expenses for apartment 4B</p>
+            </div>
+            <div class="group-actions">
+                <button>Add Expense</button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active">Members</button>
+            <button class="tab">Expenses</button>
+            <button class="tab">Balances</button>
+        </div>
+
+        <div class="tab-content active">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                <div>
+                    <h3>Group Members</h3>
+                    <p style="margin: 0;">Manage members of this group.</p>
+                </div>
+                <div>
+                    <button>Add Member</button>
+                </div>
+            </div>
+            
+            <div class="members-list">
+                <div class="member-item">
+                    <div class="member-info">
+                        <div class="member-name">Charlie <span class="member-badge">Creator</span></div>
+                        <div class="member-email">charlie@school.edu</div>
+                    </div>
+                </div>
+                
+                <div class="member-item">
+                    <div class="member-info">
+                        <div class="member-name">Alice</div>
+                        <div class="member-email">alice@school.edu</div>
+                    </div>
+                    <span title="Cannot remove member who is involved in expenses">
+                        <button class="danger small" disabled>Remove</button>
+                    </span>
+                </div>
+                
+                <div class="member-item">
+                    <div class="member-info">
+                        <div class="member-name">David</div>
+                        <div class="member-email">david@school.edu</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content">
+            <h3>Expenses</h3>
+            <p>View and manage expenses for this group.</p>
+            
+            <table style="margin-top: 20px;">
+                <thead>
+                    <tr>
+                        <th>Expense</th>
+                        <th style="text-align: center;">People</th>
+                        <th style="text-align: right;">Total Amount</th>
+                        <th style="text-align: right;">Your Share</th>
+                        <th style="text-align: center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <div style="font-weight: 600; color: #333; margin-bottom: 5px;">Grocery shopping</div>
+                            <div style="font-size: 0.9em; color: #6c757d;">Paid by Charlie on Jan 10, 2025</div>
+                        </td>
+                        <td style="text-align: center;">
+                            <div style="font-weight: 600; color: #495057;">2</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="expense-amount" style="margin: 0;">$86.40</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="expense-amount" style="margin: 0; color: #28a745; font-weight: 600;">$43.20</div>
+                        </td>
+                        <td style="text-align: right;"></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div style="font-weight: 600; color: #333; margin-bottom: 5px;">Utilities bill</div>
+                            <div style="font-size: 0.9em; color: #6c757d;">Paid by Alice on Jan 15, 2025</div>
+                        </td>
+                        <td style="text-align: center;">
+                            <div style="font-weight: 600; color: #495057;">2</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="expense-amount" style="margin: 0;">$120.00</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="expense-amount" style="margin: 0; color: #28a745; font-weight: 600;">$60.00</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                                <button class="small secondary">Edit</button>
+                                <button class="small danger">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div style="font-weight: 600; color: #333; margin-bottom: 5px;">Restaurant dinner</div>
+                            <div style="font-size: 0.9em; color: #6c757d;">Paid by David on Jan 20, 2025</div>
+                        </td>
+                        <td style="text-align: center;">
+                            <div style="font-weight: 600; color: #495057;">2</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="expense-amount" style="margin: 0;">$67.89</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="expense-amount" style="margin: 0; color: #28a745; font-weight: 600;">$33.95</div>
+                        </td>
+                        <td style="text-align: right;"></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div style="font-weight: 600; color: #333; margin-bottom: 5px;">Internet bill</div>
+                            <div style="font-size: 0.9em; color: #6c757d;">Paid by Alice on Jan 25, 2025</div>
+                        </td>
+                        <td style="text-align: center;">
+                            <div style="font-weight: 600; color: #495057;">3</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="expense-amount" style="margin: 0;">$100.00</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div class="expense-amount" style="margin: 0; color: #28a745; font-weight: 600;">$33.33</div>
+                        </td>
+                        <td style="text-align: right;">
+                            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                                <button class="small secondary">Edit</button>
+                                <button class="small danger">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr style="background-color: #f8f9fa; font-weight: 600;">
+                        <td style="border-top: 2px solid #dee2e6; padding-top: 15px;">
+                            <div>Your total share of expenses</div>
+                            <div style="font-size: 0.9em; font-weight: normal; color: #6c757d; margin-top: 5px;">Sum of your share from all expenses</div>
+                        </td>
+                        <td style="border-top: 2px solid #dee2e6; padding-top: 15px;"></td>
+                        <td style="text-align: right; border-top: 2px solid #dee2e6; padding-top: 15px;"></td>
+                        <td style="text-align: right; border-top: 2px solid #dee2e6; padding-top: 15px;">
+                            <div class="expense-amount" style="margin: 0; font-size: 1.2em; color: #28a745;">$170.48</div>
+                        </td>
+                        <td style="border-top: 2px solid #dee2e6; padding-top: 15px;"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="tab-content">
+            <h3>Balances</h3>
+            <p>Current balances for this group.</p>
+            
+            <div class="balance-summary">
+                <h3>Summary</h3>
+                <div class="balance-item">
+                    <span class="balance-name">Alice</span>
+                    <span class="balance-amount owed-by">+$49.52</span>
+                </div>
+                <div class="balance-item">
+                    <span class="balance-name">Charlie</span>
+                    <span class="balance-amount owed">-$50.13</span>
+                </div>
+                <div class="balance-item">
+                    <span class="balance-name">David</span>
+                    <span class="balance-amount owed-by">+$0.61</span>
+                </div>
+            </div>
+
+            <div class="balance-details">
+                <h3>Who Owes Whom</h3>
+                <div class="debt-item">
+                    <div class="debt-text">Charlie owes Alice</div>
+                    <div class="debt-amount">$50.13</div>
+                </div>
+                <div class="debt-item">
+                    <div class="debt-text">David owes Alice</div>
+                    <div class="debt-amount">$0.61</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+

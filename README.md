@@ -110,3 +110,4 @@ The system is organized as a three-tier architecture:
 * [src/cost_sharing/sql/schema-sqlite.sql](src/cost_sharing/sql/schema-sqlite.sql) contains schema for all database tables
 * [src/cost_sharing/sql/sample-data.sql](src/cost_sharing/sql/sample-data.sql) contains the sample dataset in SQL format
 * [docs/api.yaml](docs/api.yaml) contains an OpenAPI specification of all API endpoints.
+* [docs/ui/README.md](docs/ui/README.md) contains HTML and CSS mockups web pages
