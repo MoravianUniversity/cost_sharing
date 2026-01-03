@@ -138,6 +138,19 @@ LABEL=costsharing
 * Create a `.env` file as described in the [Configuration](#configuration) section.
 Use `http://localhost:8000` as the `BASE_URL`.
 
+* Initialize the database:
+
+  ```
+  mkdir -p database
+  sqlite3 database/costsharing.db < src/cost_sharing/sql/schema-sqlite.sql
+  ```
+
+* (Optional) Load sample data:
+
+  ```
+  sqlite3 database/costsharing.db < src/cost_sharing/sql/sample-data.sql
+  ```
+
 
 ## Running the Application in dev
 
@@ -224,6 +237,13 @@ the team.
 
 * Create a `.env` file as described in the [Configuration](#configuration) section.  On EC2 you need both the 
 OAuth values **and** the AWS DNS Subdomain System values.
+
+* Initialize the database:
+
+  ```
+  mkdir -p database
+  sqlite3 database/costsharing.db < src/cost_sharing/sql/schema-sqlite.sql
+  ```
 
 * Register your subdomain
 

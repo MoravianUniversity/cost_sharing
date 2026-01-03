@@ -107,6 +107,6 @@ The system is organized as a three-tier architecture:
 * [docs/usecases.md](docs/usecases.md) contains detailed use cases of the business logic for the system
 * [docs/dev.md](docs/dev.md) contains directions to set up dev/prod environments.
 * [docs/sample-dataset.md](docs/sample-dataset.md) contains data and discussion for some sample groups
-* [docs/schema-sqlite.sql](docs/schema-sqlite.sql) contains schema for all database tables
-* [docs/sample-data.sql](docs/sample-data.sql) contains the sample dataset in SQL format
+* [src/cost_sharing/sql/schema-sqlite.sql](src/cost_sharing/sql/schema-sqlite.sql) contains schema for all database tables
+* [src/cost_sharing/sql/sample-data.sql](src/cost_sharing/sql/sample-data.sql) contains the sample dataset in SQL format
 * [docs/api.yaml](docs/api.yaml) contains an OpenAPI specification of all API endpoints.

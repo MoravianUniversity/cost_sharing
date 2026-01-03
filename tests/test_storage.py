@@ -30,9 +30,9 @@ def test_create_user(storage):
 
 def test_create_user_auto_increment_id(storage):
     """Test that user IDs auto-increment"""
-    user1 = storage.create_user("user1@example.com", "User One")
-    user2 = storage.create_user("user2@example.com", "User Two")
-    user3 = storage.create_user("user3@example.com", "User Three")
+    user1 = storage.create_user("memuser1@example.com", "User One")
+    user2 = storage.create_user("memuser2@example.com", "User Two")
+    user3 = storage.create_user("memuser3@example.com", "User Three")
 
     assert user1.id == 1
     assert user2.id == 2
@@ -49,17 +49,17 @@ def test_create_user_duplicate_email(storage):
 
 def test_is_user(storage):
     """Test is_user returns True for existing users"""
-    storage.create_user("test@example.com", "Test User")
+    storage.create_user("memuser@example.com", "Test User")
 
-    assert storage.is_user("test@example.com") is True
+    assert storage.is_user("memuser@example.com") is True
     assert storage.is_user("nonexistent@example.com") is False
 
 
 def test_get_user_by_email(storage):
     """Test get_user_by_email retrieves existing user by email"""
-    created_user = storage.create_user("test@example.com", "Test User")
+    created_user = storage.create_user("memuser@example.com", "Test User")
 
-    retrieved_user = storage.get_user_by_email("test@example.com")
+    retrieved_user = storage.get_user_by_email("memuser@example.com")
 
     assert retrieved_user.id == created_user.id
     assert retrieved_user.email == created_user.email
@@ -74,7 +74,7 @@ def test_get_user_by_email_nonexistent(storage):
 
 def test_get_user_by_id_existing(storage):
     """Test getting user by ID when user exists"""
-    created_user = storage.create_user("test@example.com", "Test User")
+    created_user = storage.create_user("memuser@example.com", "Test User")
 
     retrieved_user = storage.get_user_by_id(created_user.id)
 
