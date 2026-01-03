@@ -212,10 +212,10 @@ the team.
   ssh -i ~/.ssh/labsuser.pem ec2-user@<instance IP>
   ```
 
-* Install `git`
+* Install `git` and `sqlite`
 
   ```
-  sudo yum install -y git
+  sudo yum install -y git sqlite
   ```
 
 * Clone the repo
