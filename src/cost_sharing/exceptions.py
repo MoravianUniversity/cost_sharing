@@ -7,3 +7,7 @@ class DuplicateEmailError(Exception):
 
 class UserNotFoundError(Exception):
     """Raised when a requested user cannot be found"""
+
+
+class StorageException(Exception):
+    """Raised when a database storage operation fails"""

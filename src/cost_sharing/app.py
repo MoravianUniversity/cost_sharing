@@ -1,13 +1,14 @@
 import os
 import sys
 import functools
+import sqlite3
 from flask import Flask, request, jsonify, g, render_template
 from dotenv import load_dotenv
 from cost_sharing.oauth_handler import (
     OAuthHandler, OAuthCodeError, OAuthVerificationError,
     TokenExpiredError, TokenInvalidError
 )
-from cost_sharing.storage import InMemoryCostStorage
+from cost_sharing.db_storage import DatabaseCostStorage
 from cost_sharing.cost_sharing import CostSharing
 from cost_sharing.exceptions import UserNotFoundError
 
@@ -189,7 +190,10 @@ def launch():  # pragma: no cover
         jwt_secret=os.getenv('JWT_SECRET')
     )
 
-    return create_app(oauth_handler, CostSharing(InMemoryCostStorage()))
+    db_conn = sqlite3.connect('database/costsharing.db')
+    db_storage = DatabaseCostStorage(db_conn)
+
+    return create_app(oauth_handler, CostSharing(db_storage))
 
 
 # This is "main" for the local launch and can be tested directly
