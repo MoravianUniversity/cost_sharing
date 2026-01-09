@@ -199,6 +199,30 @@ rule for that code.  This should be used **sparingly**, and only after consultat
 the team.
 
 
+## Makefile
+
+The project includes a `Makefile` that provides convenient commands for running tests and
+static analysis.
+
+**Run both tests and static analysis:**
+```bash
+make
+```
+
+This will run all tests (with coverage) and then run pylint. If both pass successfully,
+you'll see "All checks passed!" at the end.
+
+**Run tests only:**
+```bash
+make test
+```
+
+**Run static analysis only:**
+```bash
+make style
+```
+
+
 ## Manual Deploy on EC2
 
 * Create an EC2 Instance
