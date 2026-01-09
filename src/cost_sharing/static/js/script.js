@@ -2,6 +2,7 @@ const TOKEN_KEY = 'cost_sharing_token';
 const API_BASE = '';
 
 let currentToken = null;
+let currentUser = null;
 
 function init() {
     // Check for token in localStorage
@@ -32,6 +33,11 @@ function handleCallback(code) {
 
                 // Clean URL (remove query params)
                 window.history.replaceState({}, document.title, window.location.pathname);
+
+                // Store user info from callback
+                if (data.user) {
+                    currentUser = data.user;
+                }
 
                 // Show logged in state
                 showLoggedInState();
@@ -89,7 +95,9 @@ function fetchUserInfo() {
             return response.json();
         })
         .then(user => {
-            displayUserInfo(user);
+            currentUser = user;
+            displayUserInNav(user);
+            fetchGroups();
         })
         .catch(error => {
             console.error('Error:', error);
@@ -100,28 +108,99 @@ function fetchUserInfo() {
 function logout() {
     localStorage.removeItem(TOKEN_KEY);
     currentToken = null;
+    currentUser = null;
     showLoggedOutState();
 }
 
-function displayUserInfo(user) {
-    document.getElementById('user-id').textContent = user.id;
-    document.getElementById('user-email').textContent = user.email;
-    document.getElementById('user-name').textContent = user.name;
-    document.getElementById('user-token').textContent = currentToken;
+function displayUserInNav(user) {
+    const navUserName = document.getElementById('nav-user-name');
+    if (navUserName) {
+        navUserName.textContent = user.name;
+    }
+}
+
+function fetchGroups() {
+    if (!currentToken) {
+        return;
+    }
+
+    fetch(`${API_BASE}/groups`, {
+        headers: {
+            'Authorization': `Bearer ${currentToken}`
+        }
+    })
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 401) {
+                    logout();
+                    throw new Error('Authentication failed');
+                }
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Failed to fetch groups');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            renderGroupsList(data.groups || []);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError(error.message || 'Failed to fetch groups');
+        });
+}
+
+function renderGroupsList(groups) {
+    const groupsListContainer = document.getElementById('groups-list');
+    if (!groupsListContainer) {
+        return;
+    }
+
+    if (groups.length === 0) {
+        groupsListContainer.innerHTML = '<p>You are not a member of any groups yet.</p>';
+        return;
+    }
+
+    groupsListContainer.innerHTML = groups.map(group => `
+        <div class="group-card">
+            <div class="group-card-header">
+                <div>
+                    <h3>${escapeHtml(group.name)}</h3>
+                    <p class="group-description">${escapeHtml(group.description || '')}</p>
+                    <div class="group-meta">${group.memberCount} ${group.memberCount === 1 ? 'member' : 'members'}</div>
+                </div>
+                <div class="group-card-actions">
+                    <button class="danger small" onclick="handleDeleteGroup(${group.id})">Delete</button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function handleCreateGroup() {
+    alert('Not implemented');
+}
+
+function handleDeleteGroup(groupId) {
+    alert('Not implemented');
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 function showLoggedInState() {
-    document.getElementById('status').textContent = '✓ Logged In';
-    document.getElementById('status').className = 'status logged-in';
+    document.getElementById('navigation').classList.remove('hidden');
     document.getElementById('login-section').classList.add('hidden');
-    document.getElementById('user-section').classList.remove('hidden');
+    document.getElementById('groups-section').classList.remove('hidden');
 }
 
 function showLoggedOutState() {
-    document.getElementById('status').textContent = 'Not Logged In';
-    document.getElementById('status').className = 'status logged-out';
+    document.getElementById('navigation').classList.add('hidden');
     document.getElementById('login-section').classList.remove('hidden');
-    document.getElementById('user-section').classList.add('hidden');
+    document.getElementById('groups-section').classList.add('hidden');
 }
 
 function showError(message) {

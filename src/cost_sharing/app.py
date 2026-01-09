@@ -13,8 +13,9 @@ from cost_sharing.cost_sharing import CostSharing
 from cost_sharing.exceptions import UserNotFoundError
 
 
-# Ignore "too-many-statements" because this function is going to be long!
-def create_app(oauth_handler, application):  # pylint: disable=R0915
+# Ignore "too-many-statements" and "Too many local variables"
+# because this function is going to be long!
+def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
     """
     Create and configure Flask application.
 
@@ -167,6 +168,37 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915
                 "error": "Resource not found",
                 "message": "User not found"
             }), 404
+
+    @app.route('/groups', methods=['GET'])
+    @require_auth
+    def get_groups():
+        """
+        Get all groups that the authenticated user belongs to.
+
+        Requires valid JWT token in Authorization header.
+        Returns list of group summaries (id, name, description, memberCount).
+        """
+        # Get user_id from g (set by require_auth decorator)
+        user_id = g.user_id
+
+        # Get user's groups from application layer
+        groups = application.get_user_groups(user_id)
+
+        # Convert GroupInfo objects to JSON format
+        groups_json = [
+            {
+                "id": group.id,
+                "name": group.name,
+                "description": group.description,
+                "memberCount": group.member_count
+            }
+            for group in groups
+        ]
+
+        # Return groups in the format specified by API spec
+        return jsonify({
+            "groups": groups_json
+        }), 200
 
     return app
 

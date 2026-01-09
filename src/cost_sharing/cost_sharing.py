@@ -9,7 +9,7 @@ class CostSharing:
         Initialize the application layer with a storage implementation.
 
         Args:
-            storage: CostStorage implementation (e.g., InMemoryCostStorage, DBCostStorage)
+            storage: CostStorage implementation (e.g., DatabaseCostStorage)
         """
         self._storage = storage
 
@@ -42,3 +42,15 @@ class CostSharing:
         if self._storage.is_user(email):
             return self._storage.get_user_by_email(email)
         return self._storage.create_user(email, name)
+
+    def get_user_groups(self, user_id):
+        """
+        Get all groups that a user belongs to.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            List of GroupInfo objects for groups the user belongs to
+        """
+        return self._storage.get_user_groups(user_id)

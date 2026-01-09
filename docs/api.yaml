@@ -106,7 +106,7 @@ paths:
                   groups:
                     type: array
                     items:
-                      $ref: '#/components/schemas/GroupSummary'
+                      $ref: '#/components/schemas/GroupInfo'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
@@ -768,7 +768,7 @@ components:
           type: string
           example: "John Smith"
 
-    GroupSummary:
+    GroupInfo:
       type: object
       properties:
         id:

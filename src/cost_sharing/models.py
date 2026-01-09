@@ -9,3 +9,12 @@ class User:
     id: int
     email: str
     name: str
+
+
+@dataclass
+class GroupInfo:
+    """Group information model for listing user's groups"""
+    id: int
+    name: str
+    description: str
+    member_count: int
