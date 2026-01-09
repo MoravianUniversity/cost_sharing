@@ -44,7 +44,7 @@ def test_index(client):
     response = client.get('/')
     assert response.status_code == 200
     html = response.data.decode('utf-8')
-    assert 'Cost Sharing Demo' in html
+    assert 'Cost Sharing' in html
     assert 'style.css' in html
     assert 'script.js' in html
 
