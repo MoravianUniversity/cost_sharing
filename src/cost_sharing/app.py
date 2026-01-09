@@ -20,7 +20,7 @@ from cost_sharing.validation import (
 
 # Ignore "too-many-statements" and "Too many local variables"
 # because this function is going to be long!
-def create_app(oauth_handler, application):
+def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
     """
     Create and configure Flask application.
 
