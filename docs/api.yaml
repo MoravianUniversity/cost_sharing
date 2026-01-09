@@ -6,12 +6,6 @@ info:
   contact:
     name: Moravian University CS Department
 
-servers:
-  - url: https://api.example.com/v1
-    description: Production server
-  - url: http://localhost:5000/v1
-    description: Development server
-
 security:
   - BearerAuth: []
 
@@ -26,6 +20,31 @@ tags:
     description: Balance calculations and settlement planning endpoints
 
 paths:
+  /auth/login:
+    get:
+      tags:
+        - Auth
+      summary: Get OAuth authorization URL
+      description: Returns the Google OAuth authorization URL and state that the frontend should redirect to for user login
+      security: []
+      responses:
+        '200':
+          description: OAuth authorization URL and state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                    description: Google OAuth authorization URL to redirect the user to
+                    example: "https://accounts.google.com/o/oauth2/v2/auth?client_id=..."
+                  state:
+                    type: string
+                    description: State parameter for OAuth flow security
+                    example: "random_state_string_12345"
+
   /auth/callback:
     get:
       tags:
@@ -779,6 +798,7 @@ components:
           example: "Roommates Spring 2025"
         description:
           type: string
+          description: Group description. Empty string if no description provided.
           example: "Shared expenses for apartment 4B"
         createdBy:
           $ref: '#/components/schemas/User'

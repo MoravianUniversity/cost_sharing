@@ -22,8 +22,7 @@ class DatabaseCostStorage:
         Initialize database storage with a database connection.
 
         Args:
-            connection: A sqlite3.Connection object (e.g., sqlite3.connect(':memory:')
-                       or sqlite3.connect('costsharing.db'))
+            connection: A sqlite3.Connection object
         """
         self._conn = connection
 
