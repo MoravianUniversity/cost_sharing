@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from cost_sharing.models import User
+from cost_sharing.models import User, GroupInfo
 from cost_sharing.exceptions import (
     DuplicateEmailError,
     UserNotFoundError,
@@ -136,3 +136,44 @@ class DatabaseCostStorage:
             return User(id=row['id'], email=row['email'], name=row['name'])
         except sqlite3.Error as e:
             raise StorageException(f"Database error retrieving user by ID: {e}") from e
+
+    def get_user_groups(self, user_id):
+        """
+        Get all groups that a user belongs to.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            List of GroupInfo objects for groups the user belongs to
+
+        Raises:
+            StorageException: If a database error occurs
+        """
+        try:
+            cursor = self._conn.execute(
+                '''
+                SELECT g.id, g.name, g.description,
+                       COUNT(gm.user_id) as member_count
+                FROM groups g
+                INNER JOIN group_members gm ON g.id = gm.group_id
+                WHERE g.id IN (
+                    SELECT group_id FROM group_members WHERE user_id = ?
+                )
+                GROUP BY g.id, g.name, g.description
+                ORDER BY g.id
+                ''',
+                (user_id,)
+            )
+            rows = cursor.fetchall()
+            groups = []
+            for row in rows:
+                groups.append(GroupInfo(
+                    id=row['id'],
+                    name=row['name'],
+                    description=row['description'] or '',
+                    member_count=row['member_count']
+                ))
+            return groups
+        except sqlite3.Error as e:
+            raise StorageException(f"Database error retrieving user groups: {e}") from e

@@ -1,6 +1,6 @@
 """Mock implementation of CostSharing for testing"""
 
-from cost_sharing.models import User
+from cost_sharing.models import User, GroupInfo
 
 
 class CostSharingMock:
@@ -21,6 +21,10 @@ class CostSharingMock:
         # Configuration for get_user_by_id
         self._get_user_by_id_result = None
         self._get_user_by_id_exception = None
+
+        # Configuration for get_user_groups
+        self._get_user_groups_result = []
+        self._get_user_groups_exception = None
 
     def get_or_create_user_returns(self, user_id, email, name):
         """
@@ -110,3 +114,49 @@ class CostSharingMock:
             return User(id=1, email="default@example.com", name="Default User")
 
         return self._get_user_by_id_result
+
+    def get_user_groups_returns(self, groups):
+        """
+        Configure get_user_groups to return a list of groups.
+
+        Args:
+            groups: List of GroupInfo objects or list of tuples 
+            (id, name, description, member_count)
+        """
+        if groups and isinstance(groups[0], tuple):
+            # Convert tuples to GroupInfo objects
+            self._get_user_groups_result = [
+                GroupInfo(id=g[0], name=g[1], description=g[2], member_count=g[3])
+                for g in groups
+            ]
+        else:
+            self._get_user_groups_result = groups
+        self._get_user_groups_exception = None
+
+    def get_user_groups_raises(self, exception):
+        """
+        Configure get_user_groups to raise an exception.
+
+        Args:
+            exception: Exception instance to raise
+        """
+        self._get_user_groups_result = []
+        self._get_user_groups_exception = exception
+
+    def get_user_groups(self, user_id):  # pylint: disable=W0613
+        """
+        Get all groups that a user belongs to (mock implementation).
+
+        Args:
+            user_id: User ID (ignored, uses configured behavior)
+
+        Returns:
+            List of GroupInfo objects from configured result
+
+        Raises:
+            Exception: If configured to raise an exception
+        """
+        if self._get_user_groups_exception is not None:
+            raise self._get_user_groups_exception
+
+        return self._get_user_groups_result
