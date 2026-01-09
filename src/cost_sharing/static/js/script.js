@@ -161,20 +161,23 @@ function renderGroupsList(groups) {
         return;
     }
 
-    groupsListContainer.innerHTML = groups.map(group => `
+    groupsListContainer.innerHTML = groups.map(group => {
+        const memberNames = (group.members || []).map(member => escapeHtml(member.name)).join(', ');
+        return `
         <div class="group-card">
             <div class="group-card-header">
                 <div>
                     <h3>${escapeHtml(group.name)}</h3>
                     <p class="group-description">${escapeHtml(group.description || '')}</p>
-                    <div class="group-meta">${group.memberCount} ${group.memberCount === 1 ? 'member' : 'members'}</div>
+                    <div class="group-meta">Members: ${memberNames || 'None'}</div>
                 </div>
                 <div class="group-card-actions">
                     <button class="danger small" onclick="handleDeleteGroup(${group.id})">Delete</button>
                 </div>
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 function handleCreateGroup() {

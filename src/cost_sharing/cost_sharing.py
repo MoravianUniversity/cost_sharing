@@ -51,7 +51,7 @@ class CostSharing:
             user_id: User ID
 
         Returns:
-            List of GroupInfo objects for groups the user belongs to
+            List of Group objects for groups the user belongs to
         """
         return self._storage.get_user_groups(user_id)
 
@@ -65,7 +65,7 @@ class CostSharing:
             description: Optional group description (max 500 characters)
 
         Returns:
-            GroupInfo object for the newly created group
+            Group object for the newly created group
 
         Raises:
             UserNotFoundError: If user with the given ID is not found

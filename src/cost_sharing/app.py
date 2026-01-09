@@ -171,7 +171,7 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
         Get all groups that the authenticated user belongs to.
 
         Requires valid JWT token in Authorization header.
-        Returns list of group summaries (id, name, description, memberCount).
+        Returns list of Group objects with id, name, description, createdBy, and members.
         """
         # Get user_id from g (set by require_auth decorator)
         user_id = g.user_id
@@ -179,13 +179,25 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
         # Get user's groups from application layer
         groups = application.get_user_groups(user_id)
 
-        # Convert GroupInfo objects to JSON format
+        # Convert Group objects to JSON format
         groups_json = [
             {
                 "id": group.id,
                 "name": group.name,
                 "description": group.description,
-                "memberCount": group.member_count
+                "createdBy": {
+                    "id": group.created_by.id,
+                    "email": group.created_by.email,
+                    "name": group.created_by.name
+                },
+                "members": [
+                    {
+                        "id": member.id,
+                        "email": member.email,
+                        "name": member.name
+                    }
+                    for member in group.members
+                ]
             }
             for group in groups
         ]
@@ -204,7 +216,7 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
         Requires valid JWT token in Authorization header.
         Request body must contain 'name' (required, 1-100 chars) and
         optionally 'description' (max 500 chars).
-        Returns 201 with group information including creator and member count.
+        Returns 201 with Group object including creator and members.
         """
         # Get user_id from g (set by require_auth decorator)
         user_id = g.user_id
@@ -227,20 +239,24 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
         # Create group
         group = application.create_group(user_id, name, description)
 
-        # Get creator user info
-        creator = application.get_user_by_id(user_id)
-
         # Return group in the format specified by API spec
         return jsonify({
             "id": group.id,
             "name": group.name,
             "description": group.description,
             "createdBy": {
-                "id": creator.id,
-                "email": creator.email,
-                "name": creator.name
+                "id": group.created_by.id,
+                "email": group.created_by.email,
+                "name": group.created_by.name
             },
-            "memberCount": group.member_count
+            "members": [
+                {
+                    "id": member.id,
+                    "email": member.email,
+                    "name": member.name
+                }
+                for member in group.members
+            ]
         }), 201
 
     return app
