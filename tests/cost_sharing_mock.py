@@ -16,15 +16,15 @@ class CostSharingMock:
         """Initialize the mock."""
         # Configuration for get_or_create_user
         self._get_or_create_result = None
-        self._get_or_create_exception = None
 
         # Configuration for get_user_by_id
         self._get_user_by_id_result = None
-        self._get_user_by_id_exception = None
 
         # Configuration for get_user_groups
         self._get_user_groups_result = []
-        self._get_user_groups_exception = None
+
+        # Configuration for create_group
+        self._create_group_result = None
 
     def get_or_create_user_returns(self, user_id, email, name):
         """
@@ -36,17 +36,6 @@ class CostSharingMock:
             name: Name to return
         """
         self._get_or_create_result = User(id=user_id, email=email, name=name)
-        self._get_or_create_exception = None
-
-    def get_or_create_user_raises(self, exception):
-        """
-        Configure get_or_create_user to raise an exception.
-
-        Args:
-            exception: Exception instance to raise
-        """
-        self._get_or_create_result = None
-        self._get_or_create_exception = exception
 
     def get_user_by_id_returns(self, user_id, email, name):
         """
@@ -58,62 +47,6 @@ class CostSharingMock:
             name: Name to return
         """
         self._get_user_by_id_result = User(id=user_id, email=email, name=name)
-        self._get_user_by_id_exception = None
-
-    def get_user_by_id_raises(self, exception):
-        """
-        Configure get_user_by_id to raise an exception.
-
-        Args:
-            exception: Exception instance to raise (UserNotFoundError)
-        """
-        self._get_user_by_id_result = None
-        self._get_user_by_id_exception = exception
-
-    def get_or_create_user(self, email, name):  # pylint: disable=W0613
-        """
-        Get existing user or create new user (mock implementation).
-
-        Args:
-            email: User's email (ignored, uses configured behavior)
-            name: User's name (ignored, uses configured behavior)
-
-        Returns:
-            User object from configured result
-
-        Raises:
-            Exception: If configured to raise an exception
-        """
-        if self._get_or_create_exception is not None:
-            raise self._get_or_create_exception
-
-        if self._get_or_create_result is None:
-            # Default behavior if not configured
-            return User(id=1, email="default@example.com", name="Default User")
-
-        return self._get_or_create_result
-
-    def get_user_by_id(self, user_id):  # pylint: disable=W0613
-        """
-        Get user by their ID (mock implementation).
-
-        Args:
-            user_id: User ID (ignored, uses configured behavior)
-
-        Returns:
-            User object from configured result
-
-        Raises:
-            UserNotFoundError: If configured to raise UserNotFoundError
-        """
-        if self._get_user_by_id_exception is not None:
-            raise self._get_user_by_id_exception
-
-        if self._get_user_by_id_result is None:
-            # Default behavior if not configured
-            return User(id=1, email="default@example.com", name="Default User")
-
-        return self._get_user_by_id_result
 
     def get_user_groups_returns(self, groups):
         """
@@ -131,17 +64,56 @@ class CostSharingMock:
             ]
         else:
             self._get_user_groups_result = groups
-        self._get_user_groups_exception = None
 
-    def get_user_groups_raises(self, exception):
+    def create_group_returns(self, group_id, name, description, member_count):
         """
-        Configure get_user_groups to raise an exception.
+        Configure create_group to return successfully.
 
         Args:
-            exception: Exception instance to raise
+            group_id: Group ID to return
+            name: Group name to return
+            description: Group description to return
+            member_count: Member count to return
         """
-        self._get_user_groups_result = []
-        self._get_user_groups_exception = exception
+        self._create_group_result = GroupInfo(
+            id=group_id,
+            name=name,
+            description=description or '',
+            member_count=member_count
+        )
+
+    def get_or_create_user(self, email, name):  # pylint: disable=W0613
+        """
+        Get existing user or create new user (mock implementation).
+
+        Args:
+            email: User's email (ignored, uses configured behavior)
+            name: User's name (ignored, uses configured behavior)
+
+        Returns:
+            User object from configured result
+        """
+        if self._get_or_create_result is None:
+            # Default behavior if not configured
+            return User(id=1, email="default@example.com", name="Default User")
+
+        return self._get_or_create_result
+
+    def get_user_by_id(self, user_id):  # pylint: disable=W0613
+        """
+        Get user by their ID (mock implementation).
+
+        Args:
+            user_id: User ID (ignored, uses configured behavior)
+
+        Returns:
+            User object from configured result
+        """
+        if self._get_user_by_id_result is None:
+            # Default behavior if not configured
+            return User(id=1, email="default@example.com", name="Default User")
+
+        return self._get_user_by_id_result
 
     def get_user_groups(self, user_id):  # pylint: disable=W0613
         """
@@ -152,11 +124,23 @@ class CostSharingMock:
 
         Returns:
             List of GroupInfo objects from configured result
-
-        Raises:
-            Exception: If configured to raise an exception
         """
-        if self._get_user_groups_exception is not None:
-            raise self._get_user_groups_exception
-
         return self._get_user_groups_result
+
+    def create_group(self, user_id, name, description=None):  # pylint: disable=W0613
+        """
+        Create a new group (mock implementation).
+
+        Args:
+            user_id: User ID (ignored, uses configured behavior)
+            name: Group name (ignored, uses configured behavior)
+            description: Group description (ignored, uses configured behavior)
+
+        Returns:
+            GroupInfo object from configured result
+        """
+        if self._create_group_result is None:
+            # Default behavior if not configured
+            return GroupInfo(id=1, name="Default Group", description="", member_count=1)
+
+        return self._create_group_result

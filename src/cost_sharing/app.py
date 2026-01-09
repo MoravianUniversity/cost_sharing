@@ -10,7 +10,12 @@ from cost_sharing.oauth_handler import (
 )
 from cost_sharing.db_storage import DatabaseCostStorage
 from cost_sharing.cost_sharing import CostSharing
-from cost_sharing.exceptions import UserNotFoundError
+from cost_sharing.validation import (
+    validate_json_body,
+    validate_required_string,
+    validate_optional_string,
+    validate_required_query_param
+)
 
 
 # Ignore "too-many-statements" and "Too many local variables"
@@ -98,13 +103,10 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
         Exchanges authorization code for user info, creates/gets user, and returns JWT token.
         Called by JavaScript fetch after Google redirects to main page with code.
         """
-        # Extract code from query parameters
-        code = request.args.get('code')
-        if not code:
-            return jsonify({
-                "error": "Validation failed",
-                "message": "code parameter is required"
-            }), 400
+        # Validate code query parameter
+        code, error = validate_required_query_param(request, 'code')
+        if error is not None:
+            return error
 
         try:
             # Exchange OAuth code for user information
@@ -149,25 +151,18 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
         Requires valid JWT token in Authorization header.
         Returns user information (id, email, name).
         """
-        try:
-            # Get user_id from g (set by require_auth decorator)
-            user_id = g.user_id
+        # Get user_id from g (set by require_auth decorator)
+        user_id = g.user_id
 
-            # Get user from application layer
-            user = application.get_user_by_id(user_id)
+        # Get user from application layer
+        user = application.get_user_by_id(user_id)
 
-            # Return user information
-            return jsonify({
-                "id": user.id,
-                "email": user.email,
-                "name": user.name
-            }), 200
-
-        except UserNotFoundError:
-            return jsonify({
-                "error": "Resource not found",
-                "message": "User not found"
-            }), 404
+        # Return user information
+        return jsonify({
+            "id": user.id,
+            "email": user.email,
+            "name": user.name
+        }), 200
 
     @app.route('/groups', methods=['GET'])
     @require_auth
@@ -199,6 +194,54 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
         return jsonify({
             "groups": groups_json
         }), 200
+
+    @app.route('/groups', methods=['POST'])
+    @require_auth
+    def create_group():
+        """
+        Create a new group with the authenticated user as creator and member.
+
+        Requires valid JWT token in Authorization header.
+        Request body must contain 'name' (required, 1-100 chars) and
+        optionally 'description' (max 500 chars).
+        Returns 201 with group information including creator and member count.
+        """
+        # Get user_id from g (set by require_auth decorator)
+        user_id = g.user_id
+
+        # Validate JSON body
+        data, error = validate_json_body(request)
+        if error is not None:
+            return error
+
+        # Validate name
+        name, error = validate_required_string(data, 'name', min_len=1, max_len=100)
+        if error is not None:
+            return error
+
+        # Validate description
+        description, error = validate_optional_string(data, 'description', max_len=500)
+        if error is not None:
+            return error
+
+        # Create group
+        group = application.create_group(user_id, name, description)
+
+        # Get creator user info
+        creator = application.get_user_by_id(user_id)
+
+        # Return group in the format specified by API spec
+        return jsonify({
+            "id": group.id,
+            "name": group.name,
+            "description": group.description,
+            "createdBy": {
+                "id": creator.id,
+                "email": creator.email,
+                "name": creator.name
+            },
+            "memberCount": group.member_count
+        }), 201
 
     return app
 

@@ -73,3 +73,45 @@ def test_get_user_groups_returns_correct_member_counts(app_with_sample_data):
     """Test get_user_groups returns correct member counts for each group"""
     groups = app_with_sample_data.get_user_groups(1)
     assert_groups_are(groups, ["weekend_trip", "roommates"])
+
+
+# ============================================================================
+# create_group Tests
+# ============================================================================
+
+def test_create_group_returns_group_with_correct_fields(app_empty_db):
+    """Test create_group returns group with correct fields"""
+    user = app_empty_db.get_or_create_user("test@example.com", "Test User")
+    group = app_empty_db.create_group(user.id, "Test Group", "Test description")
+    assert group.id == 1
+    assert group.name == "Test Group"
+    assert group.description == "Test description"
+    assert group.member_count == 1
+
+
+def test_create_group_without_description(app_empty_db):
+    """Test create_group works without description"""
+    user = app_empty_db.get_or_create_user("test@example.com", "Test User")
+    group = app_empty_db.create_group(user.id, "Test Group")
+    assert group.id == 1
+    assert group.name == "Test Group"
+    assert group.description == ""
+    assert group.member_count == 1
+
+
+def test_create_group_adds_creator_as_member(app_empty_db):
+    """Test create_group adds the creator as a member"""
+    user = app_empty_db.get_or_create_user("test@example.com", "Test User")
+    group = app_empty_db.create_group(user.id, "Test Group")
+
+    # Verify user is in the group
+    user_groups = app_empty_db.get_user_groups(user.id)
+    assert len(user_groups) == 1
+    assert user_groups[0].id == group.id
+    assert user_groups[0].name == "Test Group"
+
+
+def test_create_group_raises_user_not_found_error_for_invalid_user(app_empty_db):
+    """Test create_group raises UserNotFoundError when user doesn't exist"""
+    with pytest.raises(UserNotFoundError):
+        app_empty_db.create_group(999, "Test Group")

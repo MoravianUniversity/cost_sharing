@@ -177,3 +177,54 @@ class DatabaseCostStorage:
             return groups
         except sqlite3.Error as e:
             raise StorageException(f"Database error retrieving user groups: {e}") from e
+
+    def create_group(self, user_id, name, description=None):
+        """
+        Create a new group with the specified user as creator and member.
+
+        Args:
+            user_id: User ID of the group creator
+            name: Group name (must be at least 1 character)
+            description: Optional group description (max 500 characters)
+
+        Returns:
+            GroupInfo object for the newly created group
+
+        Raises:
+            UserNotFoundError: If user with the given ID is not found
+            StorageException: If a database error occurs
+        """
+        try:
+            # Verify user exists
+            user_cursor = self._conn.execute(
+                'SELECT id FROM users WHERE id = ?',
+                (user_id,)
+            )
+            if user_cursor.fetchone() is None:
+                raise UserNotFoundError(f"User with ID {user_id} not found")
+
+            # Insert group
+            cursor = self._conn.execute(
+                'INSERT INTO groups (name, description, created_by_user_id) VALUES (?, ?, ?)',
+                (name, description, user_id)
+            )
+            group_id = cursor.lastrowid
+
+            # Add creator as member
+            self._conn.execute(
+                'INSERT INTO group_members (group_id, user_id) VALUES (?, ?)',
+                (group_id, user_id)
+            )
+
+            self._conn.commit()
+
+            # Return GroupInfo with member_count = 1 (just the creator)
+            return GroupInfo(
+                id=group_id,
+                name=name,
+                description=description or '',
+                member_count=1
+            )
+        except sqlite3.Error as e:
+            self._conn.rollback()
+            raise StorageException(f"Database error creating group: {e}") from e

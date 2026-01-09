@@ -54,3 +54,20 @@ class CostSharing:
             List of GroupInfo objects for groups the user belongs to
         """
         return self._storage.get_user_groups(user_id)
+
+    def create_group(self, user_id, name, description=None):
+        """
+        Create a new group with the specified user as creator and member.
+
+        Args:
+            user_id: User ID of the group creator
+            name: Group name (must be at least 1 character)
+            description: Optional group description (max 500 characters)
+
+        Returns:
+            GroupInfo object for the newly created group
+
+        Raises:
+            UserNotFoundError: If user with the given ID is not found
+        """
+        return self._storage.create_group(user_id, name, description)
