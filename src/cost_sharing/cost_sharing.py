@@ -55,7 +55,7 @@ class CostSharing:
         """
         return self._storage.get_user_groups(user_id)
 
-    def create_group(self, user_id, name, description=None):
+    def create_group(self, user_id, name, description=''):
         """
         Create a new group with the specified user as creator and member.
 

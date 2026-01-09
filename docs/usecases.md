@@ -74,7 +74,10 @@ This document outlines the complete list of use cases for the Cost Sharing appli
 **Main Flow**:
 1. User requests list of their groups
 2. System retrieves all groups where user is a member
-3. System returns group summaries (id, name, description, memberCount)
+3. System returns information for each group:
+   - Group details (id, name, description)
+   - Creator information
+   - List of all members
 
 **Postcondition**: User receives list of all groups they belong to
 

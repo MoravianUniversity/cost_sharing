@@ -241,14 +241,14 @@ This group contains 5 members and demonstrates various expense splitting pattern
 
 ---
 
-## Group 5: Group with Null Description
+## Group 5: Group with Empty Description
 
-This group demonstrates how the system handles groups with NULL descriptions, which is an edge case for validation and display.
+This group demonstrates how the system handles groups with empty descriptions, which is an edge case for validation and display.
 
 ### Group Details
 
 - **Name**: "Quick Split"
-- **Description**: NULL (no description provided)
+- **Description**: "" (empty string - no description provided)
 - **Creator**: Iris (User ID: 9)
 - **Members**:
   - Iris (User ID: 9) - Group creator
