@@ -11,7 +11,10 @@ assertions (e.g., assert_user_is, assert_groups_are).
 """
 
 import pytest
-from helpers import assert_user_is, assert_user_matches, assert_groups_are
+from helpers import (
+    assert_user_is, assert_user_matches, assert_groups_are,
+    assert_group_matches
+)
 from cost_sharing.exceptions import UserNotFoundError
 
 
@@ -69,8 +72,8 @@ def test_get_user_groups_returns_only_user_groups(app_with_sample_data):
     assert_groups_are(groups, ["roommates"])
 
 
-def test_get_user_groups_returns_correct_member_counts(app_with_sample_data):
-    """Test get_user_groups returns correct member counts for each group"""
+def test_get_user_groups_returns_correct_members(app_with_sample_data):
+    """Test get_user_groups returns correct members for each group"""
     groups = app_with_sample_data.get_user_groups(1)
     assert_groups_are(groups, ["weekend_trip", "roommates"])
 
@@ -83,20 +86,16 @@ def test_create_group_returns_group_with_correct_fields(app_empty_db):
     """Test create_group returns group with correct fields"""
     user = app_empty_db.get_or_create_user("test@example.com", "Test User")
     group = app_empty_db.create_group(user.id, "Test Group", "Test description")
-    assert group.id == 1
-    assert group.name == "Test Group"
-    assert group.description == "Test description"
-    assert group.member_count == 1
+    assert_group_matches(group, 1, "Test Group", "Test description", user, expected_member_count=1)
+    assert_user_matches(group.members[0], user.id, "test@example.com", "Test User")
 
 
 def test_create_group_without_description(app_empty_db):
     """Test create_group works without description"""
     user = app_empty_db.get_or_create_user("test@example.com", "Test User")
     group = app_empty_db.create_group(user.id, "Test Group")
-    assert group.id == 1
-    assert group.name == "Test Group"
-    assert group.description == ""
-    assert group.member_count == 1
+    assert_group_matches(group, 1, "Test Group", "", user, expected_member_count=1)
+    assert_user_matches(group.members[0], user.id, "test@example.com", "Test User")
 
 
 def test_create_group_adds_creator_as_member(app_empty_db):
@@ -107,8 +106,8 @@ def test_create_group_adds_creator_as_member(app_empty_db):
     # Verify user is in the group
     user_groups = app_empty_db.get_user_groups(user.id)
     assert len(user_groups) == 1
-    assert user_groups[0].id == group.id
-    assert user_groups[0].name == "Test Group"
+    assert_group_matches(user_groups[0], group.id, "Test Group", "", user, expected_member_count=1)
+    assert_user_matches(user_groups[0].members[0], user.id, "test@example.com", "Test User")
 
 
 def test_create_group_raises_user_not_found_error_for_invalid_user(app_empty_db):

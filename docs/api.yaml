@@ -106,7 +106,7 @@ paths:
                   groups:
                     type: array
                     items:
-                      $ref: '#/components/schemas/GroupInfo'
+                      $ref: '#/components/schemas/Group'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
@@ -139,7 +139,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GroupCreated'
+                $ref: '#/components/schemas/Group'
         '400':
           description: Validation error
           content:
@@ -768,22 +768,6 @@ components:
           type: string
           example: "John Smith"
 
-    GroupInfo:
-      type: object
-      properties:
-        id:
-          type: integer
-          example: 1
-        name:
-          type: string
-          example: "Roommates Spring 2025"
-        description:
-          type: string
-          example: "Shared expenses for apartment 4B"
-        memberCount:
-          type: integer
-          example: 4
-
     Group:
       type: object
       properties:
@@ -802,24 +786,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/User'
-
-    GroupCreated:
-      type: object
-      properties:
-        id:
-          type: integer
-          example: 1
-        name:
-          type: string
-          example: "Roommates Spring 2025"
-        description:
-          type: string
-          example: "Shared expenses for apartment 4B"
-        createdBy:
-          $ref: '#/components/schemas/User'
-        memberCount:
-          type: integer
-          example: 1
 
     Expense:
       type: object

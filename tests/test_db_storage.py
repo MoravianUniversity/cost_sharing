@@ -13,7 +13,7 @@ assertions (e.g., assert_user_matches, assert_groups_are).
 import sqlite3
 from unittest.mock import MagicMock
 import pytest
-from helpers import assert_user_matches, assert_groups_are
+from helpers import assert_user_matches, assert_groups_are, assert_user_is, assert_group_matches
 from cost_sharing.db_storage import DatabaseCostStorage
 from cost_sharing.exceptions import (
     DuplicateEmailError,
@@ -216,30 +216,24 @@ def test_create_group_returns_group_with_id_one_for_first_group(empty_db_storage
     """Test create_group returns group with ID 1 for first group"""
     user = empty_db_storage.create_user("test@example.com", "Test User")
     group = empty_db_storage.create_group(user.id, "Test Group", "Test description")
-    assert group.id == 1
-    assert group.name == "Test Group"
-    assert group.description == "Test description"
-    assert group.member_count == 1
+    assert_group_matches(group, 1, "Test Group", "Test description", user, expected_member_count=1)
+    assert_user_matches(group.members[0], user.id, "test@example.com", "Test User")
 
 
 def test_create_group_auto_increments_after_sample_data(db_storage_with_sample_data):
     """Test create_group auto-increments ID after sample data"""
     user = db_storage_with_sample_data.get_user_by_id(1)
     group = db_storage_with_sample_data.create_group(user.id, "New Group", "New description")
-    assert group.id == 7  # Sample data has 6 groups
-    assert group.name == "New Group"
-    assert group.description == "New description"
-    assert group.member_count == 1
+    assert_group_matches(group, 7, "New Group", "New description", user, expected_member_count=1)
+    assert_user_is(group.members[0], "alice")
 
 
 def test_create_group_without_description(empty_db_storage):
     """Test create_group works without description"""
     user = empty_db_storage.create_user("test@example.com", "Test User")
     group = empty_db_storage.create_group(user.id, "Test Group")
-    assert group.id == 1
-    assert group.name == "Test Group"
-    assert group.description == ""
-    assert group.member_count == 1
+    assert_group_matches(group, 1, "Test Group", "", user, expected_member_count=1)
+    assert_user_matches(group.members[0], user.id, "test@example.com", "Test User")
 
 
 def test_create_group_adds_creator_as_member(empty_db_storage):
@@ -250,8 +244,8 @@ def test_create_group_adds_creator_as_member(empty_db_storage):
     # Verify user is in the group
     user_groups = empty_db_storage.get_user_groups(user.id)
     assert len(user_groups) == 1
-    assert user_groups[0].id == group.id
-    assert user_groups[0].name == "Test Group"
+    assert_group_matches(user_groups[0], group.id, "Test Group", "", user, expected_member_count=1)
+    assert_user_matches(user_groups[0].members[0], user.id, "test@example.com", "Test User")
 
 
 def test_create_group_raises_user_not_found_error_for_invalid_user(empty_db_storage):

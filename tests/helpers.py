@@ -5,6 +5,8 @@ This module provides:
 1. SAMPLE_USERS, SAMPLE_GROUPS, SAMPLE_EXPENSES constants matching the sample data
 2. SAMPLE_EXPENSE_PARTICIPANTS and SAMPLE_GROUP_MEMBERS for relationships
 3. Helper assertion functions for users, groups, expenses, and relationships
+4. JSON response assertion helpers for API tests
+5. Test data factory functions for creating test objects
 
 The sample data is defined in src/cost_sharing/sql/sample-data.sql and fully
 documented in docs/sample-dataset.md. These constants serve as the single source
@@ -13,14 +15,20 @@ of truth for expected values in tests, avoiding duplication.
 Usage in tests:
     from helpers import (
         assert_user_is, assert_groups_are, assert_expenses_are,
-        assert_expense_participants, assert_group_members
+        assert_expense_participants, assert_group_members,
+        assert_user_json, assert_group_json_full, assert_groups_json_response,
+        assert_error_response, create_test_user, create_test_group
     )
     assert_user_is(user, "alice")
     assert_groups_are(groups, ["weekend_trip", "roommates"])
     assert_expenses_are(expenses, ["grocery_shopping", "utilities_bill"])
     assert_expense_participants(expense, [1, 2])
     assert_group_members(2, [3, 1, 4])
+    data = assert_groups_json_response(response, expected_status=200)
+    assert_group_json_full(data['groups'][0], group)
 """
+
+from cost_sharing.models import User, Group
 
 # Sample data constants matching sample-data.sql
 # These serve as the single source of truth for expected values in tests
@@ -244,12 +252,37 @@ def assert_user_matches(user, user_id, email, name):
     assert user.name == name, f"Expected name {name}, got {user.name}"
 
 
-def assert_group_is(group, group_key):
+# disable because it is test code, and lots of arguments is ok
+def assert_group_matches(group, group_id, name, description, creator_user, expected_member_count=1): # pylint: disable=R0913 R0917
+    """
+    Assert group matches expected values for newly created groups.
+
+    Args:
+        group: Group object to check
+        group_id: Expected group ID
+        name: Expected group name
+        description: Expected group description
+        creator_user: User object for expected creator
+        expected_member_count: Expected number of members (default: 1)
+    """
+    assert group.id == group_id, \
+        f"Expected group ID {group_id}, got {group.id}"
+    assert group.name == name, \
+        f"Expected group name '{name}', got '{group.name}'"
+    assert group.description == description, \
+        f"Expected description '{description}', got '{group.description}'"
+    assert_user_matches(group.created_by, creator_user.id,
+                        creator_user.email, creator_user.name)
+    assert len(group.members) == expected_member_count, \
+        f"Expected {expected_member_count} members, got {len(group.members)}"
+
+
+def assert_group_is(group, group_key):  # pylint: disable=R0914
     """
     Assert group matches expected group from sample data.
     
     Args:
-        group: GroupInfo object to check
+        group: Group object to check
         group_key: Key from SAMPLE_GROUPS (e.g., "weekend_trip", "roommates")
     """
     expected = SAMPLE_GROUPS[group_key]
@@ -260,8 +293,24 @@ def assert_group_is(group, group_key):
     expected_desc = expected["description"] or ""
     assert group.description == expected_desc, \
         f"Expected group description '{expected_desc}', got '{group.description}'"
-    assert group.member_count == expected["member_count"], \
-        f"Expected member_count {expected['member_count']}, got {group.member_count}"
+
+    # Check member count matches expected
+    expected_member_count = expected["member_count"]
+    assert len(group.members) == expected_member_count, \
+        f"Expected member_count {expected_member_count}, got {len(group.members)}"
+
+    # Check that creator is correct
+    # Creator IDs: 1->1, 2->3, 3->5, 4->8, 5->9, 6->10
+    creator_ids = {1: 1, 2: 3, 3: 5, 4: 8, 5: 9, 6: 10}
+    expected_creator_id = creator_ids[group.id]
+    assert group.created_by.id == expected_creator_id, \
+        f"Expected creator ID {expected_creator_id}, got {group.created_by.id}"
+
+    # Check that all expected members are present
+    expected_member_ids = sorted(SAMPLE_GROUP_MEMBERS[group.id])
+    actual_member_ids = sorted([member.id for member in group.members])
+    assert actual_member_ids == expected_member_ids, \
+        f"Expected member IDs {expected_member_ids}, got {actual_member_ids}"
 
 
 def assert_groups_are(groups, group_keys):
@@ -269,7 +318,7 @@ def assert_groups_are(groups, group_keys):
     Assert list of groups matches expected groups from sample data.
     
     Args:
-        groups: List of GroupInfo objects to check
+        groups: List of Group objects to check
         group_keys: List of keys from SAMPLE_GROUPS (e.g., ["weekend_trip", "roommates"])
     """
     assert len(groups) == len(group_keys), \
@@ -351,3 +400,206 @@ def assert_group_members(group_id, actual_member_ids):
     actual_sorted = sorted(actual_member_ids)
     assert actual_sorted == expected_member_ids, \
         f"Expected group {group_id} members {expected_member_ids}, got {actual_sorted}"
+
+
+# ============================================================================
+# JSON Response Assertion Helpers
+# ============================================================================
+
+def assert_user_json(user_json, user_id, email, name):
+    """
+    Assert JSON user object matches expected values.
+
+    Args:
+        user_json: JSON user object from API response
+        user_id: Expected user ID
+        email: Expected email
+        name: Expected name
+    """
+    assert user_json['id'] == user_id, \
+        f"Expected user ID {user_id}, got {user_json.get('id')}"
+    assert user_json['email'] == email, \
+        f"Expected email {email}, got {user_json.get('email')}"
+    assert user_json['name'] == name, \
+        f"Expected name {name}, got {user_json.get('name')}"
+
+
+def assert_group_json_full(group_json, group):
+    """
+    Assert JSON group object matches a Group model object.
+
+    Args:
+        group_json: JSON group object from API response
+        group: Group model object to compare against
+    """
+    assert group_json['id'] == group.id, \
+        f"Expected group ID {group.id}, got {group_json.get('id')}"
+    assert group_json['name'] == group.name, \
+        f"Expected group name '{group.name}', got '{group_json.get('name')}'"
+    assert group_json['description'] == group.description, \
+        f"Expected description '{group.description}', got '{group_json.get('description')}'"
+
+    # Check createdBy
+    assert 'createdBy' in group_json, "Group JSON missing 'createdBy' field"
+    assert_user_json(group_json['createdBy'], group.created_by.id,
+                     group.created_by.email, group.created_by.name)
+
+    # Check members
+    assert 'members' in group_json, "Group JSON missing 'members' field"
+    assert isinstance(group_json['members'], list), \
+        f"members should be a list, got {type(group_json['members'])}"
+    assert len(group_json['members']) == len(group.members), \
+        f"Expected {len(group.members)} members, got {len(group_json['members'])}"
+
+    for member_json, member in zip(group_json['members'], group.members):
+        assert_user_json(member_json, member.id, member.email, member.name)
+
+
+def assert_groups_json_response(response, expected_status=200):
+    """
+    Assert GET /groups response structure and status.
+
+    Args:
+        response: Flask response object
+        expected_status: Expected HTTP status code (default: 200)
+
+    Returns:
+        Parsed JSON data from response
+    """
+    assert response.status_code == expected_status, \
+        f"Expected status {expected_status}, got {response.status_code}"
+    data = response.get_json()
+    assert isinstance(data, dict), f"Response should be dict, got {type(data)}"
+    assert 'groups' in data, "Response missing 'groups' field"
+    assert isinstance(data['groups'], list), \
+        f"groups should be a list, got {type(data['groups'])}"
+    return data
+
+
+def assert_json_response(response, expected_status=200):
+    """
+    Assert JSON response status and return parsed data.
+
+    Args:
+        response: Flask response object
+        expected_status: Expected HTTP status code (default: 200)
+
+    Returns:
+        Parsed JSON data from response
+    """
+    assert response.status_code == expected_status, \
+        f"Expected status {expected_status}, got {response.status_code}"
+    data = response.get_json()
+    assert isinstance(data, dict), f"Response should be dict, got {type(data)}"
+    return data
+
+
+def assert_error_response(response, expected_status, expected_error, expected_message=None):
+    """
+    Assert error response structure.
+
+    Args:
+        response: Flask response object
+        expected_status: Expected HTTP status code
+        expected_error: Expected error type string
+        expected_message: Optional expected error message
+    """
+    assert response.status_code == expected_status, \
+        f"Expected status {expected_status}, got {response.status_code}"
+    data = response.get_json()
+    assert isinstance(data, dict), f"Response should be dict, got {type(data)}"
+    assert data['error'] == expected_error, \
+        f"Expected error '{expected_error}', got '{data.get('error')}'"
+    if expected_message:
+        assert data['message'] == expected_message, \
+            f"Expected message '{expected_message}', got '{data.get('message')}'"
+
+
+def assert_auth_me_response(response, user_id, email, name):
+    """
+    Assert /auth/me response matches expected user.
+
+    Args:
+        response: Flask response object
+        user_id: Expected user ID
+        email: Expected email
+        name: Expected name
+    """
+    assert response.status_code == 200, \
+        f"Expected status 200, got {response.status_code}"
+    data = response.get_json()
+    assert_user_json(data, user_id, email, name)
+
+
+def assert_auth_callback_response(response, expected_token, user_id, email, name):
+    """
+    Assert /auth/callback response structure.
+
+    Args:
+        response: Flask response object
+        expected_token: Expected JWT token string
+        user_id: Expected user ID
+        email: Expected email
+        name: Expected name
+    """
+    assert response.status_code == 200, \
+        f"Expected status 200, got {response.status_code}"
+    data = response.get_json()
+    assert isinstance(data, dict), f"Response should be dict, got {type(data)}"
+    assert 'token' in data, "Response missing 'token' field"
+    assert data['token'] == expected_token, \
+        f"Expected token '{expected_token}', got '{data.get('token')}'"
+    assert 'user' in data, "Response missing 'user' field"
+    assert_user_json(data['user'], user_id, email, name)
+
+
+def assert_validation_error_response(response, expected_message):
+    """
+    Assert validation error response structure.
+
+    Args:
+        response: Flask response object
+        expected_message: Expected error message
+    """
+    assert_error_response(response, 400, "Validation failed", expected_message)
+
+
+# ============================================================================
+# Test Data Factory Functions
+# ============================================================================
+
+def create_test_user(user_id=1, email="test@example.com", name="Test User"):
+    """
+    Helper to create User object for testing.
+
+    Args:
+        user_id: User ID (default: 1)
+        email: Email address (default: "test@example.com")
+        name: User name (default: "Test User")
+
+    Returns:
+        User object
+    """
+    return User(id=user_id, email=email, name=name)
+
+
+def create_test_group(group_id=1, name="Test Group", description="", creator=None, members=None):
+    """
+    Helper to create Group object for testing.
+
+    Args:
+        group_id: Group ID (default: 1)
+        name: Group name (default: "Test Group")
+        description: Group description (default: "")
+        creator: User object for creator (default: None, creates default user)
+        members: List of User objects for members (default: None, uses creator)
+
+    Returns:
+        Group object
+    """
+    if creator is None:
+        creator = create_test_user(user_id=1, email="creator@example.com", name="Creator")
+    if members is None:
+        members = [creator]
+    return Group(id=group_id, name=name, description=description,
+                 created_by=creator, members=members)

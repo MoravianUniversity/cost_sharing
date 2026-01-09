@@ -1,6 +1,6 @@
 """Mock implementation of CostSharing for testing"""
 
-from cost_sharing.models import User, GroupInfo
+from cost_sharing.models import User, Group
 
 
 class CostSharingMock:
@@ -53,34 +53,18 @@ class CostSharingMock:
         Configure get_user_groups to return a list of groups.
 
         Args:
-            groups: List of GroupInfo objects or list of tuples 
-            (id, name, description, member_count)
+            groups: List of Group objects
         """
-        if groups and isinstance(groups[0], tuple):
-            # Convert tuples to GroupInfo objects
-            self._get_user_groups_result = [
-                GroupInfo(id=g[0], name=g[1], description=g[2], member_count=g[3])
-                for g in groups
-            ]
-        else:
-            self._get_user_groups_result = groups
+        self._get_user_groups_result = groups
 
-    def create_group_returns(self, group_id, name, description, member_count):
+    def create_group_returns(self, group):
         """
         Configure create_group to return successfully.
 
         Args:
-            group_id: Group ID to return
-            name: Group name to return
-            description: Group description to return
-            member_count: Member count to return
+            group: Group object to return
         """
-        self._create_group_result = GroupInfo(
-            id=group_id,
-            name=name,
-            description=description or '',
-            member_count=member_count
-        )
+        self._create_group_result = group
 
     def get_or_create_user(self, email, name):  # pylint: disable=W0613
         """
@@ -123,7 +107,7 @@ class CostSharingMock:
             user_id: User ID (ignored, uses configured behavior)
 
         Returns:
-            List of GroupInfo objects from configured result
+            List of Group objects from configured result
         """
         return self._get_user_groups_result
 
@@ -137,10 +121,14 @@ class CostSharingMock:
             description: Group description (ignored, uses configured behavior)
 
         Returns:
-            GroupInfo object from configured result
+            Group object from configured result
         """
         if self._create_group_result is None:
             # Default behavior if not configured
-            return GroupInfo(id=1, name="Default Group", description="", member_count=1)
+            default_user = User(id=1, email="default@example.com", name="Default User")
+            return Group(
+                id=1, name="Default Group", description="",
+                created_by=default_user, members=[default_user]
+            )
 
         return self._create_group_result

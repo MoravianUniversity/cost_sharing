@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from cost_sharing.models import User, GroupInfo
+from cost_sharing.models import User, Group
 from cost_sharing.exceptions import (
     DuplicateEmailError,
     UserNotFoundError,
@@ -145,38 +145,77 @@ class DatabaseCostStorage:
             user_id: User ID
 
         Returns:
-            List of GroupInfo objects for groups the user belongs to
+            List of Group objects for groups the user belongs to
 
         Raises:
             StorageException: If a database error occurs
         """
         try:
-            cursor = self._conn.execute(
-                '''
-                SELECT g.id, g.name, g.description,
-                       COUNT(gm.user_id) as member_count
-                FROM groups g
-                INNER JOIN group_members gm ON g.id = gm.group_id
-                WHERE g.id IN (
-                    SELECT group_id FROM group_members WHERE user_id = ?
-                )
-                GROUP BY g.id, g.name, g.description
-                ORDER BY g.id
-                ''',
-                (user_id,)
-            )
-            rows = cursor.fetchall()
+            group_rows = self._get_groups_with_creator_info(user_id)
             groups = []
-            for row in rows:
-                groups.append(GroupInfo(
+            for row in group_rows:
+                members = self._get_group_members(row['id'])
+                creator = self._build_creator_from_row(row)
+                groups.append(Group(
                     id=row['id'],
                     name=row['name'],
                     description=row['description'] or '',
-                    member_count=row['member_count']
+                    created_by=creator,
+                    members=members
                 ))
             return groups
         except sqlite3.Error as e:
             raise StorageException(f"Database error retrieving user groups: {e}") from e
+
+    def _get_groups_with_creator_info(self, user_id):
+        """
+        Private helper to get all groups (with creator info) a user belongs to.
+        """
+        cursor = self._conn.execute(
+            '''
+            SELECT g.id, g.name, g.description, g.created_by_user_id,
+                   creator.id as creator_id, creator.email as creator_email,
+                   creator.name as creator_name
+            FROM groups g
+            INNER JOIN users creator ON g.created_by_user_id = creator.id
+            WHERE g.id IN (
+                SELECT group_id FROM group_members WHERE user_id = ?
+            )
+            ORDER BY g.id
+            ''',
+            (user_id,)
+        )
+        return cursor.fetchall()
+
+    def _get_group_members(self, group_id):
+        """
+        Private helper to get all users who are members of the given group.
+        """
+        members_cursor = self._conn.execute(
+            '''
+            SELECT u.id, u.email, u.name
+            FROM group_members gm
+            INNER JOIN users u ON gm.user_id = u.id
+            WHERE gm.group_id = ?
+            ORDER BY u.id
+            ''',
+            (group_id,)
+        )
+        member_rows = members_cursor.fetchall()
+        return [
+            User(id=member_row['id'], email=member_row['email'], name=member_row['name'])
+            for member_row in member_rows
+        ]
+
+    def _build_creator_from_row(self, row):
+        """
+        Private helper to build a User object for the creator from a group row.
+        """
+        return User(
+            id=row['creator_id'],
+            email=row['creator_email'],
+            name=row['creator_name']
+        )
 
     def create_group(self, user_id, name, description=None):
         """
@@ -188,43 +227,58 @@ class DatabaseCostStorage:
             description: Optional group description (max 500 characters)
 
         Returns:
-            GroupInfo object for the newly created group
+            Group object for the newly created group
 
         Raises:
             UserNotFoundError: If user with the given ID is not found
             StorageException: If a database error occurs
         """
         try:
-            # Verify user exists
-            user_cursor = self._conn.execute(
-                'SELECT id FROM users WHERE id = ?',
-                (user_id,)
-            )
-            if user_cursor.fetchone() is None:
-                raise UserNotFoundError(f"User with ID {user_id} not found")
-
-            # Insert group
-            cursor = self._conn.execute(
-                'INSERT INTO groups (name, description, created_by_user_id) VALUES (?, ?, ?)',
-                (name, description, user_id)
-            )
-            group_id = cursor.lastrowid
-
-            # Add creator as member
-            self._conn.execute(
-                'INSERT INTO group_members (group_id, user_id) VALUES (?, ?)',
-                (group_id, user_id)
-            )
-
+            creator = self._get_user_by_id(user_id)
+            group_id = self._insert_group(name, description, user_id)
+            self._add_group_member(group_id, user_id)
             self._conn.commit()
 
-            # Return GroupInfo with member_count = 1 (just the creator)
-            return GroupInfo(
+            return Group(
                 id=group_id,
                 name=name,
                 description=description or '',
-                member_count=1
+                created_by=creator,
+                members=[creator]
             )
         except sqlite3.Error as e:
             self._conn.rollback()
             raise StorageException(f"Database error creating group: {e}") from e
+
+    def _get_user_by_id(self, user_id):
+        """
+        Private helper to fetch User object by ID.
+        Raises UserNotFoundError if user does not exist.
+        """
+        user_cursor = self._conn.execute(
+            'SELECT id, email, name FROM users WHERE id = ?',
+            (user_id,)
+        )
+        user_row = user_cursor.fetchone()
+        if user_row is None:
+            raise UserNotFoundError(f"User with ID {user_id} not found")
+        return User(id=user_row['id'], email=user_row['email'], name=user_row['name'])
+
+    def _insert_group(self, name, description, user_id):
+        """
+        Private helper to insert a new group and return its id.
+        """
+        cursor = self._conn.execute(
+            'INSERT INTO groups (name, description, created_by_user_id) VALUES (?, ?, ?)',
+            (name, description, user_id)
+        )
+        return cursor.lastrowid
+
+    def _add_group_member(self, group_id, user_id):
+        """
+        Private helper to add a user as a member to a group.
+        """
+        self._conn.execute(
+            'INSERT INTO group_members (group_id, user_id) VALUES (?, ?)',
+            (group_id, user_id)
+        )

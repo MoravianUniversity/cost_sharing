@@ -1,6 +1,9 @@
 """Data models for the Cost Sharing application"""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import List
 
 
 @dataclass
@@ -12,9 +15,10 @@ class User:
 
 
 @dataclass
-class GroupInfo:
-    """Group information model for listing user's groups"""
+class Group:
+    """Group model representing a cost-sharing group"""
     id: int
     name: str
     description: str
-    member_count: int
+    created_by: User
+    members: List[User]
