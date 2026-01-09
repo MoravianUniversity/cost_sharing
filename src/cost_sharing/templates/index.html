@@ -3,33 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cost Sharing Demo</title>
+    <title>Cost Sharing</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
+    <nav id="navigation" class="hidden">
+        <h1>Cost Sharing</h1>
+        <div class="nav-links">
+            <a href="#">My Groups</a>
+            <span class="user-name" id="nav-user-name"></span>
+            <button class="logout small" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
     <div class="container">
-        <h1>Cost Sharing Demo</h1>
-        <div id="status" class="status logged-out">Loading...</div>
-        
         <div id="login-section">
+            <h1>Cost Sharing</h1>
+            <p>Please log in with your Google account to access the Cost Sharing application.</p>
             <button onclick="login()">Login with Google</button>
         </div>
         
-        <div id="user-section" class="hidden">
-            <div class="user-info">
-                <h2>User Information</h2>
-                <p><strong>ID:</strong> <span id="user-id">-</span></p>
-                <p><strong>Email:</strong> <span id="user-email">-</span></p>
-                <p><strong>Name:</strong> <span id="user-name">-</span></p>
-                <div class="token-display">
-                    <details>
-                        <summary>Show Token (for debugging)</summary>
-                        <code id="user-token">-</code>
-                    </details>
+        <div id="groups-section" class="hidden">
+            <div class="page-header">
+                <div>
+                    <h2>My Groups</h2>
+                    <p>Select a group to view details, expenses, and balances.</p>
+                </div>
+                <div class="page-actions">
+                    <button onclick="handleCreateGroup()">Create Group</button>
                 </div>
             </div>
-            <button onclick="fetchUserInfo()">Refresh User Info</button>
-            <button class="logout" onclick="logout()">Logout</button>
+            
+            <div id="groups-list" class="groups-list">
+                <!-- Groups will be dynamically inserted here -->
+            </div>
         </div>
     </div>
     <script src="/static/js/script.js"></script>

@@ -140,15 +140,17 @@ Use `http://localhost:8000` as the `BASE_URL`.
 
 * Initialize the database:
 
-  ```
-  mkdir -p database
-  sqlite3 database/costsharing.db < src/cost_sharing/sql/schema-sqlite.sql
-  ```
-
-* (Optional) Load sample data:
+  **Option 1:** Create empty database (schema only)
 
   ```
-  sqlite3 database/costsharing.db < src/cost_sharing/sql/sample-data.sql
+  ./scripts/create_empty_db.sh
+  ```
+
+  **Option 2:** Create database with sample data.  This script will load the sample data and
+    then replace Alice's name/email with yours.
+
+  ```
+  ./scripts/create_sample_db.sh
   ```
 
 
