@@ -178,7 +178,131 @@ function renderGroupsList(groups) {
 }
 
 function handleCreateGroup() {
-    alert('Not implemented');
+    showCreateGroupModal();
+}
+
+function showCreateGroupModal() {
+    // Create modal if it doesn't exist
+    let modalOverlay = document.getElementById('create-group-modal');
+    if (!modalOverlay) {
+        modalOverlay = document.createElement('div');
+        modalOverlay.id = 'create-group-modal';
+        modalOverlay.className = 'modal-overlay';
+        modalOverlay.innerHTML = `
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>Create New Group</h2>
+                    <button class="modal-close" onclick="closeCreateGroupModal()">&times;</button>
+                </div>
+                <form id="create-group-form" onsubmit="submitCreateGroup(event)">
+                    <div class="form-group">
+                        <label for="group-name">Group Name <span class="required">*</span></label>
+                        <input type="text" id="group-name" name="name" required maxlength="100" placeholder="Enter group name">
+                    </div>
+                    <div class="form-group">
+                        <label for="group-description">Description</label>
+                        <textarea id="group-description" name="description" maxlength="500" placeholder="Enter group description (optional)"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="secondary" onclick="closeCreateGroupModal()">Cancel</button>
+                        <button type="submit">Create Group</button>
+                    </div>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(modalOverlay);
+        
+        // Close modal when clicking outside
+        modalOverlay.addEventListener('click', function(event) {
+            if (event.target === modalOverlay) {
+                closeCreateGroupModal();
+            }
+        });
+    }
+    modalOverlay.classList.add('active');
+    document.getElementById('group-name').focus();
+}
+
+function closeCreateGroupModal() {
+    const modalOverlay = document.getElementById('create-group-modal');
+    if (modalOverlay) {
+        modalOverlay.classList.remove('active');
+        document.getElementById('create-group-form').reset();
+    }
+}
+
+function submitCreateGroup(event) {
+    event.preventDefault();
+    
+    if (!currentToken) {
+        showError('You must be logged in to create a group');
+        return;
+    }
+
+    const form = event.target;
+    const formData = new FormData(form);
+    const name = formData.get('name').trim();
+    const description = formData.get('description').trim();
+
+    // Validate name
+    if (!name || name.length === 0) {
+        showError('Group name is required');
+        return;
+    }
+
+    if (name.length > 100) {
+        showError('Group name must be at most 100 characters');
+        return;
+    }
+
+    if (description.length > 500) {
+        showError('Description must be at most 500 characters');
+        return;
+    }
+
+    // Prepare request body
+    const requestBody = {
+        name: name
+    };
+    if (description) {
+        requestBody.description = description;
+    }
+
+    // Disable form during submission
+    const submitButton = form.querySelector('button[type="submit"]');
+    const originalText = submitButton.textContent;
+    submitButton.disabled = true;
+    submitButton.textContent = 'Creating...';
+
+    fetch(`${API_BASE}/groups`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${currentToken}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+    })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Failed to create group');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            closeCreateGroupModal();
+            // Refresh groups list
+            fetchGroups();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError(error.message || 'Failed to create group');
+        })
+        .finally(() => {
+            submitButton.disabled = false;
+            submitButton.textContent = originalText;
+        });
 }
 
 function handleDeleteGroup(groupId) {

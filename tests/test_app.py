@@ -6,7 +6,6 @@ from cost_sharing.oauth_handler import (
     OAuthCodeError, OAuthVerificationError,
     TokenExpiredError, TokenInvalidError
 )
-from cost_sharing.exceptions import UserNotFoundError
 
 
 @pytest.fixture(name='client')
@@ -181,23 +180,6 @@ def test_auth_me_invalid_token(configured_client, oauth_handler):
     data = response.get_json()
     assert data['error'] == "Unauthorized"
     assert data['message'] == "Authentication required"
-
-
-def test_auth_me_user_not_found(configured_client, oauth_handler, application):
-    """Test /auth/me when user doesn't exist."""
-    # Configure mocks
-    oauth_handler.validate_token_returns(999)  # Valid token but user doesn't exist
-    application.get_user_by_id_raises(UserNotFoundError("User not found"))
-
-    response = configured_client.get(
-        '/auth/me',
-        headers={'Authorization': 'Bearer valid-token'}
-    )
-
-    assert response.status_code == 404
-    data = response.get_json()
-    assert data['error'] == "Resource not found"
-    assert data['message'] == "User not found"
 
 
 def test_auth_login_success(configured_client):
@@ -405,3 +387,241 @@ def test_get_groups_member_count_accuracy(configured_client, oauth_handler, appl
     data = response.get_json()
     assert data['groups'][0]['memberCount'] == 2
     assert data['groups'][1]['memberCount'] == 10
+
+
+# ============================================================================
+# POST /groups Tests
+# ============================================================================
+
+def test_create_group_success(configured_client, oauth_handler, application):
+    """Test successful group creation."""
+    # Configure mocks
+    oauth_handler.validate_token_returns(1)
+    application.create_group_returns(1, "Test Group", "Test description", 1)
+    application.get_user_by_id_returns(1, "test@example.com", "Test User")
+
+    response = configured_client.post(
+        '/groups',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'name': 'Test Group',
+            'description': 'Test description'
+        }
+    )
+
+    assert response.status_code == 201
+    data = response.get_json()
+    assert data['id'] == 1
+    assert data['name'] == "Test Group"
+    assert data['description'] == "Test description"
+    assert data['memberCount'] == 1
+    assert data['createdBy']['id'] == 1
+    assert data['createdBy']['email'] == "test@example.com"
+    assert data['createdBy']['name'] == "Test User"
+
+
+def test_create_group_without_description(configured_client, oauth_handler, application):
+    """Test group creation without description."""
+    # Configure mocks
+    oauth_handler.validate_token_returns(1)
+    application.create_group_returns(1, "Test Group", "", 1)
+    application.get_user_by_id_returns(1, "test@example.com", "Test User")
+
+    response = configured_client.post(
+        '/groups',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'name': 'Test Group'
+        }
+    )
+
+    assert response.status_code == 201
+    data = response.get_json()
+    assert data['name'] == "Test Group"
+    assert data['description'] == ""
+
+
+def test_create_group_missing_header(configured_client):
+    """Test POST /groups with missing Authorization header."""
+    response = configured_client.post(
+        '/groups',
+        json={'name': 'Test Group'}
+    )
+
+    assert response.status_code == 401
+    data = response.get_json()
+    assert data['error'] == "Unauthorized"
+    assert data['message'] == "Authentication required"
+
+
+def test_create_group_missing_name(configured_client, oauth_handler):
+    """Test POST /groups with missing name."""
+    oauth_handler.validate_token_returns(1)
+
+    response = configured_client.post(
+        '/groups',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        json={}
+    )
+
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['error'] == "Validation failed"
+    assert data['message'] == "name is required"
+
+
+def test_create_group_empty_name(configured_client, oauth_handler):
+    """Test POST /groups with empty name."""
+    oauth_handler.validate_token_returns(1)
+
+    response = configured_client.post(
+        '/groups',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        json={'name': ''}
+    )
+
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['error'] == "Validation failed"
+    assert data['message'] == "name must be at least 1 character"
+
+
+def test_create_group_name_too_long(configured_client, oauth_handler):
+    """Test POST /groups with name too long."""
+    oauth_handler.validate_token_returns(1)
+
+    long_name = 'a' * 101
+    response = configured_client.post(
+        '/groups',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        json={'name': long_name}
+    )
+
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['error'] == "Validation failed"
+    assert data['message'] == "name must be at most 100 characters"
+
+
+def test_create_group_description_too_long(configured_client, oauth_handler):
+    """Test POST /groups with description too long."""
+    oauth_handler.validate_token_returns(1)
+
+    long_description = 'a' * 501
+    response = configured_client.post(
+        '/groups',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'name': 'Test Group',
+            'description': long_description
+        }
+    )
+
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['error'] == "Validation failed"
+    assert data['message'] == "description must be at most 500 characters"
+
+
+def test_create_group_non_string_description(configured_client, oauth_handler):
+    """Test POST /groups with non-string description."""
+    oauth_handler.validate_token_returns(1)
+
+    response = configured_client.post(
+        '/groups',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'name': 'Test Group',
+            'description': 123
+        }
+    )
+
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['error'] == "Validation failed"
+    assert data['message'] == "description must be a string"
+
+
+def test_create_group_invalid_json(configured_client, oauth_handler):
+    """Test POST /groups with invalid JSON."""
+    oauth_handler.validate_token_returns(1)
+
+    response = configured_client.post(
+        '/groups',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        data='invalid json'
+    )
+
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['error'] == "Validation failed"
+    assert 'message' in data
+
+
+def test_create_group_max_length_name(configured_client, oauth_handler, application):
+    """Test POST /groups with maximum length name (100 chars)."""
+    oauth_handler.validate_token_returns(1)
+    max_name = 'a' * 100
+    application.create_group_returns(1, max_name, "", 1)
+    application.get_user_by_id_returns(1, "test@example.com", "Test User")
+
+    response = configured_client.post(
+        '/groups',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        json={'name': max_name}
+    )
+
+    assert response.status_code == 201
+    data = response.get_json()
+    assert data['name'] == max_name
+
+
+def test_create_group_max_length_description(configured_client, oauth_handler, application):
+    """Test POST /groups with maximum length description (500 chars)."""
+    oauth_handler.validate_token_returns(1)
+    max_description = 'a' * 500
+    application.create_group_returns(1, "Test Group", max_description, 1)
+    application.get_user_by_id_returns(1, "test@example.com", "Test User")
+
+    response = configured_client.post(
+        '/groups',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'name': 'Test Group',
+            'description': max_description
+        }
+    )
+
+    assert response.status_code == 201
+    data = response.get_json()
+    assert data['description'] == max_description

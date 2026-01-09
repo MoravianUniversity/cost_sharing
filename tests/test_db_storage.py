@@ -206,3 +206,63 @@ def test_get_user_groups_raises_storage_exception_on_database_error(error_storag
 
     with pytest.raises(StorageException):
         storage.get_user_groups(1)
+
+
+# ============================================================================
+# create_group Tests
+# ============================================================================
+
+def test_create_group_returns_group_with_id_one_for_first_group(empty_db_storage):
+    """Test create_group returns group with ID 1 for first group"""
+    user = empty_db_storage.create_user("test@example.com", "Test User")
+    group = empty_db_storage.create_group(user.id, "Test Group", "Test description")
+    assert group.id == 1
+    assert group.name == "Test Group"
+    assert group.description == "Test description"
+    assert group.member_count == 1
+
+
+def test_create_group_auto_increments_after_sample_data(db_storage_with_sample_data):
+    """Test create_group auto-increments ID after sample data"""
+    user = db_storage_with_sample_data.get_user_by_id(1)
+    group = db_storage_with_sample_data.create_group(user.id, "New Group", "New description")
+    assert group.id == 7  # Sample data has 6 groups
+    assert group.name == "New Group"
+    assert group.description == "New description"
+    assert group.member_count == 1
+
+
+def test_create_group_without_description(empty_db_storage):
+    """Test create_group works without description"""
+    user = empty_db_storage.create_user("test@example.com", "Test User")
+    group = empty_db_storage.create_group(user.id, "Test Group")
+    assert group.id == 1
+    assert group.name == "Test Group"
+    assert group.description == ""
+    assert group.member_count == 1
+
+
+def test_create_group_adds_creator_as_member(empty_db_storage):
+    """Test create_group adds the creator as a member"""
+    user = empty_db_storage.create_user("test@example.com", "Test User")
+    group = empty_db_storage.create_group(user.id, "Test Group")
+
+    # Verify user is in the group
+    user_groups = empty_db_storage.get_user_groups(user.id)
+    assert len(user_groups) == 1
+    assert user_groups[0].id == group.id
+    assert user_groups[0].name == "Test Group"
+
+
+def test_create_group_raises_user_not_found_error_for_invalid_user(empty_db_storage):
+    """Test create_group raises UserNotFoundError when user doesn't exist"""
+    with pytest.raises(UserNotFoundError):
+        empty_db_storage.create_group(999, "Test Group")
+
+
+def test_create_group_raises_storage_exception_on_database_error(error_storage):
+    """Test create_group raises StorageException when database error occurs"""
+    storage = error_storage
+
+    with pytest.raises(StorageException):
+        storage.create_group(1, "Test Group")
