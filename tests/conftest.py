@@ -46,15 +46,18 @@ def create_db_connection():
     Base fixture: Create an in-memory SQLite database connection with schema loaded.
     The connection is properly closed when the fixture tears down.
     """
-    with sqlite3.connect(':memory:') as conn:
-        conn.row_factory = sqlite3.Row
-        conn.execute('PRAGMA foreign_keys = ON')
+    conn = sqlite3.connect(':memory:')
+    conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA foreign_keys = ON')
 
-        # Load schema
-        schema_path = importlib.resources.files('cost_sharing') / 'sql' / 'schema-sqlite.sql'
-        execute_sql_file(conn, schema_path)
+    # Load schema
+    schema_path = importlib.resources.files('cost_sharing') / 'sql' / 'schema-sqlite.sql'
+    execute_sql_file(conn, schema_path)
 
-        yield conn
+    yield conn
+
+    # Close connection during fixture teardown
+    conn.close()
 
 
 @pytest.fixture(name='db_connection_with_data')
