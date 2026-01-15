@@ -395,6 +395,66 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
                 "message": "User is already a member of this group"
             }), 409
 
+    @app.route('/groups/<int:groupId>/expenses', methods=['GET'])
+    @require_auth
+    def get_group_expenses(groupId):  # pylint: disable=C0103
+        """
+        Get all expenses for a group.
+
+        Requires valid JWT token in Authorization header.
+        User must be a member of the group.
+        Returns list of Expense objects with perPersonAmount calculated.
+        """
+        # Get user_id from g (set by require_auth decorator)
+        user_id = g.user_id
+
+        try:
+            # Get expenses from application layer (includes membership check)
+            expenses = application.get_group_expenses(groupId, user_id)
+
+            # Convert Expense objects to JSON format with camelCase field names
+            expenses_json = [
+                {
+                    "id": expense.id,
+                    "groupId": expense.group_id,
+                    "description": expense.description,
+                    "amount": expense.amount,
+                    "date": expense.date,
+                    "paidBy": {
+                        "id": expense.paid_by.id,
+                        "email": expense.paid_by.email,
+                        "name": expense.paid_by.name
+                    },
+                    "splitBetween": [
+                        {
+                            "id": user.id,
+                            "email": user.email,
+                            "name": user.name
+                        }
+                        for user in expense.split_between
+                    ],
+                    "perPersonAmount": expense.per_person_amount
+                }
+                for expense in expenses
+            ]
+
+            # Return expenses in the format specified by API spec
+            return jsonify({
+                "expenses": expenses_json
+            }), 200
+
+        except GroupNotFoundError:
+            return jsonify({
+                "error": "Resource not found",
+                "message": "Group not found"
+            }), 404
+
+        except ForbiddenError:
+            return jsonify({
+                "error": "Forbidden",
+                "message": "Access denied"
+            }), 403
+
     return app
 
 

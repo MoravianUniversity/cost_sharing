@@ -14,7 +14,8 @@ import sqlite3
 from unittest.mock import MagicMock
 import pytest
 from helpers import assert_user_matches, assert_groups_are, \
-    assert_user_is, assert_group_matches, assert_group_is, assert_group_has_members
+    assert_user_is, assert_group_matches, assert_group_is, assert_group_has_members, \
+    assert_expenses_are, assert_expense_participants
 from cost_sharing.db_storage import DatabaseCostStorage
 from cost_sharing.exceptions import StorageException
 
@@ -320,3 +321,119 @@ def test_add_group_member_fails_on_database_error(error_storage):
     with pytest.raises(StorageException) as exc_info:
         storage.add_group_member(1, 1)
     assert "Database error adding member" in str(exc_info.value)
+
+
+# ============================================================================
+# get_group_expenses Tests
+# ============================================================================
+
+def test_get_group_expenses_returns_empty_list_when_no_expenses(db_storage_with_sample_data):
+    """Test get_group_expenses returns empty list when group has no expenses"""
+    storage = db_storage_with_sample_data
+    # Group 1 (weekend_trip) has no expenses in sample data
+    expenses = storage.get_group_expenses(1)
+    assert expenses == []
+
+
+def test_get_group_expenses_returns_empty_list_for_nonexistent_group(empty_db_storage):
+    """Test get_group_expenses returns empty list when group doesn't exist"""
+    expenses = empty_db_storage.get_group_expenses(999)
+    assert expenses == []
+
+
+def test_get_group_expenses_returns_single_expense(db_storage_with_sample_data):
+    """Test get_group_expenses returns single expense when group has one expense"""
+    storage = db_storage_with_sample_data
+    # Group 3 has one expense (team_lunch)
+    expenses = storage.get_group_expenses(3)
+    assert_expenses_are(expenses, ["team_lunch"])
+
+
+def test_get_group_expenses_returns_multiple_expenses(db_storage_with_sample_data):
+    """Test get_group_expenses returns multiple expenses when group has multiple expenses"""
+    storage = db_storage_with_sample_data
+    # Group 2 has 4 expenses
+    expenses = storage.get_group_expenses(2)
+    assert_expenses_are(
+        expenses,
+        ["grocery_shopping", "utilities_bill", "restaurant_dinner", "internet_bill"]
+    )
+
+
+def test_get_group_expenses_includes_paid_by_user(db_storage_with_sample_data):
+    """Test get_group_expenses includes correct paid_by user for each expense"""
+    storage = db_storage_with_sample_data
+    expenses = storage.get_group_expenses(2)
+
+    # First expense (grocery_shopping) was paid by Charlie (user 3)
+    assert expenses[0].paid_by.id == 3
+    assert_user_is(expenses[0].paid_by, "charlie")
+
+    # Second expense (utilities_bill) was paid by Alice (user 1)
+    assert expenses[1].paid_by.id == 1
+    assert_user_is(expenses[1].paid_by, "alice")
+
+
+def test_get_group_expenses_includes_split_between_participants(db_storage_with_sample_data):
+    """Test get_group_expenses includes correct split_between participants for each expense"""
+    storage = db_storage_with_sample_data
+    expenses = storage.get_group_expenses(2)
+
+    # First expense (grocery_shopping) split between Charlie and Alice
+    assert_expense_participants(expenses[0], [3, 1])
+
+    # Fourth expense (internet_bill) split between Charlie, Alice, and David
+    assert_expense_participants(expenses[3], [3, 1, 4])
+
+
+def test_get_group_expenses_has_per_person_amount_as_none(db_storage_with_sample_data):
+    """Test get_group_expenses returns expenses with per_person_amount as None"""
+    storage = db_storage_with_sample_data
+    expenses = storage.get_group_expenses(2)
+
+    # All expenses should have per_person_amount as None from storage layer
+    for expense in expenses:
+        assert expense.per_person_amount is None
+
+
+def test_get_group_expenses_orders_by_date_then_id(db_storage_with_sample_data):
+    """Test get_group_expenses returns expenses ordered by date, then by ID"""
+    storage = db_storage_with_sample_data
+    expenses = storage.get_group_expenses(2)
+
+    # Group 2 expenses should be ordered by date:
+    # 2025-01-10 (grocery_shopping, id=1)
+    # 2025-01-15 (utilities_bill, id=2)
+    # 2025-01-20 (restaurant_dinner, id=3)
+    # 2025-01-25 (internet_bill, id=4)
+    assert expenses[0].id == 1
+    assert expenses[1].id == 2
+    assert expenses[2].id == 3
+    assert expenses[3].id == 4
+
+
+def test_get_group_expenses_with_large_group(db_storage_with_sample_data):
+    """Test get_group_expenses works with group that has many expenses"""
+    storage = db_storage_with_sample_data
+    # Group 4 has 4 expenses
+    expenses = storage.get_group_expenses(4)
+    assert_expenses_are(expenses, ["textbooks", "coffee_snacks", "printing_costs", "group_dinner"])
+
+
+def test_get_group_expenses_with_many_participants(db_storage_with_sample_data):
+    """Test get_group_expenses correctly handles expenses with many participants"""
+    storage = db_storage_with_sample_data
+    expenses = storage.get_group_expenses(4)
+
+    # Textbooks expense split between all 5 members
+    textbooks_expense = [e for e in expenses if e.id == 6][0]
+    assert_expense_participants(textbooks_expense, [8, 9, 10, 11, 2])
+
+
+def test_get_group_expenses_raises_storage_exception_on_database_error(error_storage):
+    """Test get_group_expenses raises StorageException when database error occurs"""
+    storage = error_storage
+
+    with pytest.raises(StorageException) as exc_info:
+        storage.get_group_expenses(1)
+    assert "Database error retrieving group expenses" in str(exc_info.value)

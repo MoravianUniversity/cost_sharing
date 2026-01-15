@@ -337,8 +337,8 @@ def assert_expense_is(expense, expense_key):
     expected = SAMPLE_EXPENSES[expense_key]
     assert expense.id == expected["id"], \
         f"Expected expense ID {expected['id']}, got {expense.id}"
-    assert expense.groupId == expected["group_id"], \
-        f"Expected group_id {expected['group_id']}, got {expense.groupId}"
+    assert expense.group_id == expected["group_id"], \
+        f"Expected group_id {expected['group_id']}, got {expense.group_id}"
     assert expense.description == expected["description"], \
         f"Expected description '{expected['description']}', got '{expense.description}'"
     assert expense.amount == expected["amount"], \
@@ -346,13 +346,13 @@ def assert_expense_is(expense, expense_key):
     assert expense.date == expected["expense_date"], \
         f"Expected date {expected['expense_date']}, got {expense.date}"
 
-    # Check paidBy user
-    assert expense.paidBy.id == expected["paid_by_user_id"], \
-        f"Expected paidBy user ID {expected['paid_by_user_id']}, got {expense.paidBy.id}"
+    # Check paid_by user
+    assert expense.paid_by.id == expected["paid_by_user_id"], \
+        f"Expected paid_by user ID {expected['paid_by_user_id']}, got {expense.paid_by.id}"
 
-    # Check splitBetween participants
+    # Check split_between participants
     expected_participants = SAMPLE_EXPENSE_PARTICIPANTS[expected["id"]]
-    actual_participant_ids = sorted([user.id for user in expense.splitBetween])
+    actual_participant_ids = sorted([user.id for user in expense.split_between])
     expected_participant_ids = sorted(expected_participants)
     assert actual_participant_ids == expected_participant_ids, \
         f"Expected splitBetween user IDs {expected_participant_ids}, got {actual_participant_ids}"
@@ -375,13 +375,13 @@ def assert_expenses_are(expenses, expense_keys):
 
 def assert_expense_participants(expense, expected_user_ids):
     """
-    Assert expense splitBetween matches expected user IDs.
+    Assert expense split_between matches expected user IDs.
     
     Args:
         expense: Expense object to check
-        expected_user_ids: List of expected user IDs in splitBetween
+        expected_user_ids: List of expected user IDs in split_between
     """
-    actual_user_ids = sorted([user.id for user in expense.splitBetween])
+    actual_user_ids = sorted([user.id for user in expense.split_between])
     expected_sorted = sorted(expected_user_ids)
     assert actual_user_ids == expected_sorted, \
         f"Expected splitBetween user IDs {expected_sorted}, got {actual_user_ids}"

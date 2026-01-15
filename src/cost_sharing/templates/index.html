@@ -47,7 +47,7 @@
                         <p class="group-description" id="group-details-description"></p>
                     </div>
                     <div class="group-actions">
-                        <button id="group-details-add-expense" style="display: none;">Add Expense</button>
+                        <button id="group-details-add-expense" style="display: none;" onclick="handleAddExpense()">Add Expense</button>
                     </div>
                 </div>
 
@@ -76,7 +76,9 @@
                 <div id="tab-expenses" class="tab-content">
                     <h3>Expenses</h3>
                     <p>View and manage expenses for this group.</p>
-                    <p style="color: #6c757d; font-style: italic;">Expense management coming soon.</p>
+                    <div id="expenses-container">
+                        <!-- Expenses table will be dynamically inserted here -->
+                    </div>
                 </div>
 
                 <div id="tab-balances" class="tab-content">
