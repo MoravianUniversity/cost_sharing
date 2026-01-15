@@ -9,5 +9,13 @@ class UserNotFoundError(Exception):
     """Raised when a requested user cannot be found"""
 
 
+class GroupNotFoundError(Exception):
+    """Raised when a requested group cannot be found"""
+
+
+class ForbiddenError(Exception):
+    """Raised when a user does not have permission to perform an action"""
+
+
 class StorageException(Exception):
     """Raised when a database storage operation fails"""

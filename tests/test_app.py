@@ -1,11 +1,10 @@
 import pytest
 from oauth_handler_mock import OAuthHandlerMock
-from cost_sharing_mock import CostSharingMock
 from helpers import (
     assert_groups_json_response, assert_json_response,
-    assert_group_json_full, assert_error_response,
-    assert_auth_me_response, assert_auth_callback_response,
-    assert_validation_error_response, create_test_user, create_test_group
+    assert_error_response, assert_auth_me_response,
+    assert_auth_callback_response, assert_validation_error_response,
+    assert_group_json_is
 )
 from cost_sharing.app import create_app
 from cost_sharing.oauth_handler import (
@@ -14,39 +13,29 @@ from cost_sharing.oauth_handler import (
 )
 
 
-@pytest.fixture(name='client')
-def create_client():
-    """Create Flask test client with mocked dependencies."""
-    # Create mocks for dependencies
-    oauth_handler = OAuthHandlerMock()
-    application = CostSharingMock()
-
-    app = create_app(oauth_handler, application)
-    return app.test_client()
-
-
 @pytest.fixture(name='oauth_handler')
 def create_oauth_handler():
     """Create OAuth handler mock for test configuration."""
     return OAuthHandlerMock()
 
 
-@pytest.fixture(name='application')
-def create_application():
-    """Create application mock for test configuration."""
-    return CostSharingMock()
-
-
-@pytest.fixture(name='configured_client')
-def create_configured_client(oauth_handler, application):
-    """Create Flask test client with configured mocks."""
-    app = create_app(oauth_handler, application)
+@pytest.fixture(name='api_client')
+def create_api_client(oauth_handler, app_with_sample_data):
+    """Create Flask test client with real CostSharing and sample data."""
+    app = create_app(oauth_handler, app_with_sample_data)
     return app.test_client()
 
 
-def test_index(client):
+@pytest.fixture(name='api_client_empty_db')
+def create_api_client_empty_db(oauth_handler, app_empty_db):
+    """Create Flask test client with real CostSharing and empty database."""
+    app = create_app(oauth_handler, app_empty_db)
+    return app.test_client()
+
+
+def test_index(api_client):
     """Test that index route returns the demo page HTML."""
-    response = client.get('/')
+    response = api_client.get('/')
     assert response.status_code == 200
     html = response.data.decode('utf-8')
     assert 'Cost Sharing' in html
@@ -54,78 +43,89 @@ def test_index(client):
     assert 'script.js' in html
 
 
-def test_auth_callback_success(configured_client, oauth_handler, application):
-    """Test successful OAuth callback."""
-    # Configure mocks
-    oauth_handler.exchange_code_returns("test@example.com", "Test User")
-    application.get_or_create_user_returns(1, "test@example.com", "Test User")
+def test_auth_callback_success_new_user(api_client_empty_db, oauth_handler):
+    """Test successful OAuth callback - creates new user."""
+    # Configure OAuth mock
+    oauth_handler.exchange_code_returns("newuser@example.com", "New User")
 
     # Make request
-    response = configured_client.get('/auth/callback?code=test123')
+    response = api_client_empty_db.get('/auth/callback?code=test123')
 
-    # Verify response
+    # Verify response - user should be created with ID 1
     assert_auth_callback_response(response, "dummy-jwt-token-for-user-1",
-                                  1, "test@example.com", "Test User")
+                                  1, "newuser@example.com", "New User")
 
 
-def test_auth_callback_missing_code(configured_client):
+def test_auth_callback_success_existing_user(api_client, oauth_handler):
+    """Test successful OAuth callback - returns existing user (Alice from sample data)."""
+    # Configure OAuth mock to return Alice's email
+    oauth_handler.exchange_code_returns("alice@school.edu", "Alice")
+
+    # Make request
+    response = api_client.get('/auth/callback?code=test123')
+
+    # Verify response - should return existing user ID 1 (Alice)
+    assert_auth_callback_response(response, "dummy-jwt-token-for-user-1",
+                                  1, "alice@school.edu", "Alice")
+
+
+def test_auth_callback_missing_code(api_client):
     """Test OAuth callback with missing code parameter."""
-    response = configured_client.get('/auth/callback')
+    response = api_client.get('/auth/callback')
 
     assert_validation_error_response(response, "code parameter is required")
 
 
-def test_auth_callback_invalid_code(configured_client, oauth_handler):
+def test_auth_callback_invalid_code(api_client, oauth_handler):
     """Test OAuth callback with invalid authorization code."""
-    # Configure mocks
+    # Configure OAuth mock
     oauth_handler.exchange_code_raises(OAuthCodeError("Invalid code"))
 
     # Make request
-    response = configured_client.get('/auth/callback?code=invalid')
+    response = api_client.get('/auth/callback?code=invalid')
 
     # Verify response
     assert_validation_error_response(response, "Invalid or expired authorization code")
 
 
-def test_auth_callback_verification_error(configured_client, oauth_handler):
+def test_auth_callback_verification_error(api_client, oauth_handler):
     """Test OAuth callback with verification error."""
-    # Configure mocks
+    # Configure OAuth mock
     oauth_handler.exchange_code_raises(OAuthVerificationError("Verification failed"))
 
     # Make request
-    response = configured_client.get('/auth/callback?code=test123')
+    response = api_client.get('/auth/callback?code=test123')
 
     # Verify response
     assert_error_response(response, 401, "Unauthorized", "OAuth verification failed")
 
 
-def test_auth_me_success(configured_client, oauth_handler, application):
-    """Test successful /auth/me request."""
-    # Configure mocks
+def test_auth_me_success(api_client, oauth_handler):
+    """Test successful /auth/me request - uses sample data (Alice, user ID 1)."""
+    # Configure OAuth mock to return user ID 1 (Alice from sample data)
     oauth_handler.validate_token_returns(1)
-    application.get_user_by_id_returns(1, "test@example.com", "Test User")
 
     # Make request with Authorization header
-    response = configured_client.get(
+    response = api_client.get(
         '/auth/me',
         headers={'Authorization': 'Bearer valid-token-123'}
     )
 
-    # Verify response
-    assert_auth_me_response(response, 1, "test@example.com", "Test User")
+    # Verify response - Alice from sample data
+    assert_auth_me_response(response, 1, "alice@school.edu", "Alice")
 
 
-def test_auth_me_missing_header(configured_client):
+def test_auth_me_missing_header(api_client):
     """Test /auth/me with missing Authorization header."""
-    response = configured_client.get('/auth/me')
+    response = api_client.get('/auth/me')
 
     assert_error_response(response, 401, "Unauthorized", "Authentication required")
 
 
-def test_auth_me_invalid_header_format(configured_client):
+def test_auth_me_invalid_header_format(api_client):
     """Test /auth/me with invalid Authorization header format."""
     # Missing "Bearer " prefix
-    response = configured_client.get(
+    response = api_client.get(
         '/auth/me',
         headers={'Authorization': 'invalid-token-123'}
     )
@@ -133,12 +133,12 @@ def test_auth_me_invalid_header_format(configured_client):
     assert_error_response(response, 401, "Unauthorized", "Authentication required")
 
 
-def test_auth_me_expired_token(configured_client, oauth_handler):
+def test_auth_me_expired_token(api_client, oauth_handler):
     """Test /auth/me with expired token."""
-    # Configure mock to raise TokenExpiredError
+    # Configure OAuth mock to raise TokenExpiredError
     oauth_handler.validate_token_raises(TokenExpiredError("Token expired"))
 
-    response = configured_client.get(
+    response = api_client.get(
         '/auth/me',
         headers={'Authorization': 'Bearer expired-token'}
     )
@@ -146,12 +146,12 @@ def test_auth_me_expired_token(configured_client, oauth_handler):
     assert_error_response(response, 401, "Unauthorized", "Authentication required")
 
 
-def test_auth_me_invalid_token(configured_client, oauth_handler):
+def test_auth_me_invalid_token(api_client, oauth_handler):
     """Test /auth/me with invalid token."""
-    # Configure mock to raise TokenInvalidError
+    # Configure OAuth mock to raise TokenInvalidError
     oauth_handler.validate_token_raises(TokenInvalidError("Invalid token"))
 
-    response = configured_client.get(
+    response = api_client.get(
         '/auth/me',
         headers={'Authorization': 'Bearer invalid-token'}
     )
@@ -162,10 +162,10 @@ def test_auth_me_invalid_token(configured_client, oauth_handler):
     assert data['message'] == "Authentication required"
 
 
-def test_auth_login_success(configured_client):
+def test_auth_login_success(api_client):
     """Test /auth/login returns authorization URL."""
     # OAuthHandlerMock.get_authorization_url() returns dummy values
-    response = configured_client.get('/auth/login')
+    response = api_client.get('/auth/login')
 
     assert response.status_code == 200
     data = response.get_json()
@@ -179,17 +179,17 @@ def test_auth_login_success(configured_client):
 # GET /groups Tests
 # ============================================================================
 
-def test_get_groups_missing_header(configured_client):
+def test_get_groups_missing_header(api_client):
     """Test GET /groups with missing Authorization header."""
-    response = configured_client.get('/groups')
+    response = api_client.get('/groups')
 
     assert_error_response(response, 401, "Unauthorized", "Authentication required")
 
 
-def test_get_groups_invalid_header_format(configured_client):
+def test_get_groups_invalid_header_format(api_client):
     """Test GET /groups with invalid Authorization header format."""
     # Missing "Bearer " prefix
-    response = configured_client.get(
+    response = api_client.get(
         '/groups',
         headers={'Authorization': 'invalid-token-123'}
     )
@@ -197,12 +197,12 @@ def test_get_groups_invalid_header_format(configured_client):
     assert_error_response(response, 401, "Unauthorized", "Authentication required")
 
 
-def test_get_groups_expired_token(configured_client, oauth_handler):
+def test_get_groups_expired_token(api_client, oauth_handler):
     """Test GET /groups with expired token."""
-    # Configure mock to raise TokenExpiredError
+    # Configure OAuth mock to raise TokenExpiredError
     oauth_handler.validate_token_raises(TokenExpiredError("Token expired"))
 
-    response = configured_client.get(
+    response = api_client.get(
         '/groups',
         headers={'Authorization': 'Bearer expired-token'}
     )
@@ -210,12 +210,12 @@ def test_get_groups_expired_token(configured_client, oauth_handler):
     assert_error_response(response, 401, "Unauthorized", "Authentication required")
 
 
-def test_get_groups_invalid_token(configured_client, oauth_handler):
+def test_get_groups_invalid_token(api_client, oauth_handler):
     """Test GET /groups with invalid token."""
-    # Configure mock to raise TokenInvalidError
+    # Configure OAuth mock to raise TokenInvalidError
     oauth_handler.validate_token_raises(TokenInvalidError("Invalid token"))
 
-    response = configured_client.get(
+    response = api_client.get(
         '/groups',
         headers={'Authorization': 'Bearer invalid-token'}
     )
@@ -223,13 +223,12 @@ def test_get_groups_invalid_token(configured_client, oauth_handler):
     assert_error_response(response, 401, "Unauthorized", "Authentication required")
 
 
-def test_get_groups_empty_list(configured_client, oauth_handler, application):
-    """Test GET /groups when user belongs to no groups."""
-    # Configure mocks
-    oauth_handler.validate_token_returns(1)
-    application.get_user_groups_returns([])
+def test_get_groups_empty_list(api_client, oauth_handler):
+    """Test GET /groups when user belongs to no groups - User 7 (George) has no groups."""
+    # Configure OAuth mock to return user ID 7 (George from sample data - no groups)
+    oauth_handler.validate_token_returns(7)
 
-    response = configured_client.get(
+    response = api_client.get(
         '/groups',
         headers={'Authorization': 'Bearer valid-token'}
     )
@@ -238,178 +237,117 @@ def test_get_groups_empty_list(configured_client, oauth_handler, application):
     assert data['groups'] == []
 
 
-# disable because it is test code, and breaking into functions would be overkill
-def test_get_groups_single_group(configured_client, oauth_handler, application): # pylint: disable=R0914
-    """Test GET /groups when user belongs to one group."""
-    # Configure mocks
-    oauth_handler.validate_token_returns(1)
-    creator = create_test_user(3, "charlie@school.edu", "Charlie")
-    member1 = create_test_user(1, "alice@school.edu", "Alice")
-    member2 = create_test_user(4, "david@school.edu", "David")
-    group = create_test_group(
-        group_id=1,
-        name="Roommates Spring 2025",
-        description="Shared expenses for apartment 4B",
-        creator=creator,
-        members=[creator, member1, member2]
-    )
-    application.get_user_groups_returns([group])
+def test_get_groups_single_group(api_client, oauth_handler):
+    """Test GET /groups when user belongs to one group - User 3 (Charlie) has group 2."""
+    # Configure OAuth mock to return user ID 3 (Charlie from sample data - member of group 2)
+    oauth_handler.validate_token_returns(3)
 
-    response = configured_client.get(
+    response = api_client.get(
         '/groups',
         headers={'Authorization': 'Bearer valid-token'}
     )
 
     data = assert_groups_json_response(response)
     assert len(data['groups']) == 1
-    assert_group_json_full(data['groups'][0], group)
+    assert_group_json_is(data['groups'][0], "roommates")
 
 
-# disable because it is test code, and breaking into functions would be overkill
-def test_get_groups_multiple_groups(configured_client, oauth_handler, application): # pylint: disable=R0914
-    """Test GET /groups when user belongs to multiple groups."""
-    # Configure mocks
+def test_get_groups_multiple_groups(api_client, oauth_handler):
+    """Test GET /groups when user belongs to multiple groups - User 1 (Alice) has groups 1 and 2."""
+    # Configure OAuth mock to return user ID 1 (Alice from sample data - member of groups 1 and 2)
     oauth_handler.validate_token_returns(1)
-    creator1 = create_test_user(1, "alice@school.edu", "Alice")
-    member1 = create_test_user(2, "bob@school.edu", "Bob")
-    group1 = create_test_group(
-        group_id=1,
-        name="Weekend Trip Planning",
-        description="Planning expenses for upcoming weekend getaway",
-        creator=creator1,
-        members=[creator1, member1]
-    )
-    creator2 = create_test_user(3, "charlie@school.edu", "Charlie")
-    member2a = create_test_user(1, "alice@school.edu", "Alice")
-    member2b = create_test_user(4, "david@school.edu", "David")
-    group2 = create_test_group(
-        group_id=2,
-        name="Roommates Spring 2025",
-        description="Shared expenses for apartment 4B",
-        creator=creator2,
-        members=[creator2, member2a, member2b]
-    )
-    application.get_user_groups_returns([group1, group2])
 
-    response = configured_client.get(
+    response = api_client.get(
         '/groups',
         headers={'Authorization': 'Bearer valid-token'}
     )
 
     data = assert_groups_json_response(response)
     assert len(data['groups']) == 2
-    assert_group_json_full(data['groups'][0], group1)
-    assert_group_json_full(data['groups'][1], group2)
+    # Alice is in groups 1 (weekend_trip) and 2 (roommates)
+    assert_group_json_is(data['groups'][0], "weekend_trip")
+    assert_group_json_is(data['groups'][1], "roommates")
 
 
-def test_get_groups_response_structure(configured_client, oauth_handler, application):
-    """Test GET /groups response has correct structure."""
-    # Configure mocks
-    oauth_handler.validate_token_returns(1)
-    creator = create_test_user(1, "creator@example.com", "Creator")
-    members = [
-        create_test_user(i, f"user{i}@example.com", f"User {i}")
-        for i in range(1, 6)
-    ]
-    group = create_test_group(
-        group_id=1,
-        name="Test Group",
-        description="Test description",
-        creator=creator,
-        members=members
-    )
-    application.get_user_groups_returns([group])
+def test_get_groups_response_structure(api_client, oauth_handler):
+    """Test GET /groups response has correct structure - 
+       uses group 4 (study_group) with 5 members."""
+    # Configure OAuth mock to return user ID 2 (Bob from sample data - member of groups 1 and 4)
+    oauth_handler.validate_token_returns(2)
 
-    response = configured_client.get(
+    response = api_client.get(
         '/groups',
         headers={'Authorization': 'Bearer valid-token'}
     )
 
     data = assert_groups_json_response(response)
-    assert len(data['groups']) == 1
-    assert_group_json_full(data['groups'][0], group)
+    assert len(data['groups']) == 2  # Bob is in groups 1 and 4
+    # Find group 4 (study_group) in the response
+    study_group = next(g for g in data['groups'] if g['id'] == 4)
+    assert_group_json_is(study_group, "study_group")
+    # Verify structure by checking it has all required fields
+    assert 'id' in study_group
+    assert 'name' in study_group
+    assert 'description' in study_group
+    assert 'createdBy' in study_group
+    assert 'members' in study_group
+    assert len(study_group['members']) == 5
 
 
-def test_get_groups_null_description(configured_client, oauth_handler, application):
-    """Test GET /groups handles null/empty description correctly."""
-    # Configure mocks
-    oauth_handler.validate_token_returns(1)
-    creator = create_test_user(1, "creator@example.com", "Creator")
-    member = create_test_user(2, "member@example.com", "Member")
-    group = create_test_group(
-        group_id=1,
-        name="Test Group",
-        description="",
-        creator=creator,
-        members=[creator, member]
-    )
-    application.get_user_groups_returns([group])
+def test_get_groups_null_description(api_client, oauth_handler):
+    """Test GET /groups handles null/empty description correctly - 
+       Group 5 (quick_split) has null description."""
+    # Configure OAuth mock to return user ID 9 (Iris from sample data - member of groups 4 and 5)
+    oauth_handler.validate_token_returns(9)
 
-    response = configured_client.get(
+    response = api_client.get(
         '/groups',
         headers={'Authorization': 'Bearer valid-token'}
     )
 
     data = assert_groups_json_response(response)
-    assert_group_json_full(data['groups'][0], group)
+    assert len(data['groups']) == 2  # Iris is in groups 4 and 5
+    # Find group 5 (quick_split) in the response
+    quick_split_group = next(g for g in data['groups'] if g['id'] == 5)
+    assert_group_json_is(quick_split_group, "quick_split")
+    assert quick_split_group['description'] == ""
 
 
-# disable because it is test code, and breaking into functions would be overkill
-def test_get_groups_members_accuracy(configured_client, oauth_handler, application): # pylint: disable=R0914
-    """Test GET /groups members array reflects actual members."""
-    # Configure mocks
+def test_get_groups_members_accuracy(api_client, oauth_handler):
+    """Test GET /groups members array reflects actual members - 
+       Alice has groups with different member counts."""
+    # Configure OAuth mock to return user ID 1 (Alice from sample data)
     oauth_handler.validate_token_returns(1)
-    creator1 = create_test_user(1, "creator1@example.com", "Creator 1")
-    member1 = create_test_user(2, "member1@example.com", "Member 1")
-    group1 = create_test_group(
-        group_id=1,
-        name="Small Group",
-        description="Description",
-        creator=creator1,
-        members=[creator1, member1]
-    )
-    creator2 = create_test_user(3, "creator2@example.com", "Creator 2")
-    members2 = [
-        create_test_user(i, f"member{i}@example.com", f"Member {i}")
-        for i in range(4, 14)
-    ]
-    group2 = create_test_group(
-        group_id=2,
-        name="Large Group",
-        description="Description",
-        creator=creator2,
-        members=[creator2] + members2
-    )
-    application.get_user_groups_returns([group1, group2])
 
-    response = configured_client.get(
+    response = api_client.get(
         '/groups',
         headers={'Authorization': 'Bearer valid-token'}
     )
 
     data = assert_groups_json_response(response)
-    assert_group_json_full(data['groups'][0], group1)
-    assert_group_json_full(data['groups'][1], group2)
+    assert len(data['groups']) == 2
+    # Group 1 (weekend_trip) has 2 members
+    assert len(data['groups'][0]['members']) == 2
+    # Group 2 (roommates) has 3 members
+    assert len(data['groups'][1]['members']) == 3
 
 
 # ============================================================================
 # POST /groups Tests
 # ============================================================================
 
-def test_create_group_success(configured_client, oauth_handler, application):
+def test_create_group_success(api_client_empty_db, oauth_handler):
     """Test successful group creation."""
-    # Configure mocks
-    oauth_handler.validate_token_returns(1)
-    creator = create_test_user(1, "test@example.com", "Test User")
-    group = create_test_group(
-        group_id=1,
-        name="Test Group",
-        description="Test description",
-        creator=creator
-    )
-    application.create_group_returns(group)
+    # Configure OAuth mock to return user ID 1 (will create user if needed)
+    oauth_handler.exchange_code_returns("test@example.com", "Test User")
 
-    response = configured_client.post(
+    # First, create a user via OAuth callback
+    api_client_empty_db.get('/auth/callback?code=test123')
+
+    # Now configure token validation
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client_empty_db.post(
         '/groups',
         headers={
             'Authorization': 'Bearer valid-token',
@@ -422,23 +360,26 @@ def test_create_group_success(configured_client, oauth_handler, application):
     )
 
     data = assert_json_response(response, expected_status=201)
-    assert_group_json_full(data, group)
+    assert data['name'] == 'Test Group'
+    assert data['description'] == 'Test description'
+    assert data['id'] == 1
+    assert data['createdBy']['id'] == 1
+    assert len(data['members']) == 1
+    assert data['members'][0]['id'] == 1
 
 
-def test_create_group_without_description(configured_client, oauth_handler, application):
+def test_create_group_without_description(api_client_empty_db, oauth_handler):
     """Test group creation without description."""
-    # Configure mocks
-    oauth_handler.validate_token_returns(1)
-    creator = create_test_user(1, "test@example.com", "Test User")
-    group = create_test_group(
-        group_id=1,
-        name="Test Group",
-        description="",
-        creator=creator
-    )
-    application.create_group_returns(group)
+    # Configure OAuth mock to return user ID 1 (will create user if needed)
+    oauth_handler.exchange_code_returns("test@example.com", "Test User")
 
-    response = configured_client.post(
+    # First, create a user via OAuth callback
+    api_client_empty_db.get('/auth/callback?code=test123')
+
+    # Now configure token validation
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client_empty_db.post(
         '/groups',
         headers={
             'Authorization': 'Bearer valid-token',
@@ -450,12 +391,14 @@ def test_create_group_without_description(configured_client, oauth_handler, appl
     )
 
     data = assert_json_response(response, expected_status=201)
-    assert_group_json_full(data, group)
+    assert data['name'] == 'Test Group'
+    assert data['description'] == ''
+    assert data['id'] == 1
 
 
-def test_create_group_missing_header(configured_client):
+def test_create_group_missing_header(api_client):
     """Test POST /groups with missing Authorization header."""
-    response = configured_client.post(
+    response = api_client.post(
         '/groups',
         json={'name': 'Test Group'}
     )
@@ -463,11 +406,11 @@ def test_create_group_missing_header(configured_client):
     assert_error_response(response, 401, "Unauthorized", "Authentication required")
 
 
-def test_create_group_missing_name(configured_client, oauth_handler):
+def test_create_group_missing_name(api_client, oauth_handler):
     """Test POST /groups with missing name."""
     oauth_handler.validate_token_returns(1)
 
-    response = configured_client.post(
+    response = api_client.post(
         '/groups',
         headers={
             'Authorization': 'Bearer valid-token',
@@ -479,11 +422,11 @@ def test_create_group_missing_name(configured_client, oauth_handler):
     assert_validation_error_response(response, "name is required")
 
 
-def test_create_group_empty_name(configured_client, oauth_handler):
+def test_create_group_empty_name(api_client, oauth_handler):
     """Test POST /groups with empty name."""
     oauth_handler.validate_token_returns(1)
 
-    response = configured_client.post(
+    response = api_client.post(
         '/groups',
         headers={
             'Authorization': 'Bearer valid-token',
@@ -495,12 +438,12 @@ def test_create_group_empty_name(configured_client, oauth_handler):
     assert_validation_error_response(response, "name must be at least 1 character")
 
 
-def test_create_group_name_too_long(configured_client, oauth_handler):
+def test_create_group_name_too_long(api_client, oauth_handler):
     """Test POST /groups with name too long."""
     oauth_handler.validate_token_returns(1)
 
     long_name = 'a' * 101
-    response = configured_client.post(
+    response = api_client.post(
         '/groups',
         headers={
             'Authorization': 'Bearer valid-token',
@@ -512,12 +455,12 @@ def test_create_group_name_too_long(configured_client, oauth_handler):
     assert_validation_error_response(response, "name must be at most 100 characters")
 
 
-def test_create_group_description_too_long(configured_client, oauth_handler):
+def test_create_group_description_too_long(api_client, oauth_handler):
     """Test POST /groups with description too long."""
     oauth_handler.validate_token_returns(1)
 
     long_description = 'a' * 501
-    response = configured_client.post(
+    response = api_client.post(
         '/groups',
         headers={
             'Authorization': 'Bearer valid-token',
@@ -532,11 +475,11 @@ def test_create_group_description_too_long(configured_client, oauth_handler):
     assert_validation_error_response(response, "description must be at most 500 characters")
 
 
-def test_create_group_non_string_description(configured_client, oauth_handler):
+def test_create_group_non_string_description(api_client, oauth_handler):
     """Test POST /groups with non-string description."""
     oauth_handler.validate_token_returns(1)
 
-    response = configured_client.post(
+    response = api_client.post(
         '/groups',
         headers={
             'Authorization': 'Bearer valid-token',
@@ -551,11 +494,11 @@ def test_create_group_non_string_description(configured_client, oauth_handler):
     assert_validation_error_response(response, "description must be a string")
 
 
-def test_create_group_invalid_json(configured_client, oauth_handler):
+def test_create_group_invalid_json(api_client, oauth_handler):
     """Test POST /groups with invalid JSON."""
     oauth_handler.validate_token_returns(1)
 
-    response = configured_client.post(
+    response = api_client.post(
         '/groups',
         headers={
             'Authorization': 'Bearer valid-token',
@@ -570,20 +513,15 @@ def test_create_group_invalid_json(configured_client, oauth_handler):
     assert 'message' in data
 
 
-def test_create_group_max_length_name(configured_client, oauth_handler, application):
+def test_create_group_max_length_name(api_client_empty_db, oauth_handler):
     """Test POST /groups with maximum length name (100 chars)."""
+    # Configure OAuth mock to return user ID 1 (will create user if needed)
+    oauth_handler.exchange_code_returns("test@example.com", "Test User")
+    api_client_empty_db.get('/auth/callback?code=test123')
     oauth_handler.validate_token_returns(1)
-    max_name = 'a' * 100
-    creator = create_test_user(1, "test@example.com", "Test User")
-    group = create_test_group(
-        group_id=1,
-        name=max_name,
-        description="",
-        creator=creator
-    )
-    application.create_group_returns(group)
 
-    response = configured_client.post(
+    max_name = 'a' * 100
+    response = api_client_empty_db.post(
         '/groups',
         headers={
             'Authorization': 'Bearer valid-token',
@@ -593,23 +531,19 @@ def test_create_group_max_length_name(configured_client, oauth_handler, applicat
     )
 
     data = assert_json_response(response, expected_status=201)
-    assert_group_json_full(data, group)
+    assert data['name'] == max_name
+    assert len(data['name']) == 100
 
 
-def test_create_group_max_length_description(configured_client, oauth_handler, application):
+def test_create_group_max_length_description(api_client_empty_db, oauth_handler):
     """Test POST /groups with maximum length description (500 chars)."""
+    # Configure OAuth mock to return user ID 1 (will create user if needed)
+    oauth_handler.exchange_code_returns("test@example.com", "Test User")
+    api_client_empty_db.get('/auth/callback?code=test123')
     oauth_handler.validate_token_returns(1)
-    max_description = 'a' * 500
-    creator = create_test_user(1, "test@example.com", "Test User")
-    group = create_test_group(
-        group_id=1,
-        name="Test Group",
-        description=max_description,
-        creator=creator
-    )
-    application.create_group_returns(group)
 
-    response = configured_client.post(
+    max_description = 'a' * 500
+    response = api_client_empty_db.post(
         '/groups',
         headers={
             'Authorization': 'Bearer valid-token',
@@ -622,4 +556,129 @@ def test_create_group_max_length_description(configured_client, oauth_handler, a
     )
 
     data = assert_json_response(response, expected_status=201)
-    assert_group_json_full(data, group)
+    assert data['description'] == max_description
+    assert len(data['description']) == 500
+
+
+# ============================================================================
+# GET /groups/{groupId} Tests
+# ============================================================================
+
+def test_get_group_success(api_client, oauth_handler):
+    """Test successful group retrieval - User 1 (Alice) accessing group 2 (roommates)."""
+    # Configure OAuth mock to return user ID 1 (Alice from sample data - member of group 2)
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.get(
+        '/groups/2',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    data = assert_json_response(response, expected_status=200)
+    assert_group_json_is(data, "roommates")
+
+
+def test_get_group_missing_header(api_client):
+    """Test GET /groups/{groupId} without Authorization header."""
+    response = api_client.get('/groups/1')
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_get_group_invalid_header_format(api_client):
+    """Test GET /groups/{groupId} with invalid Authorization header format."""
+    response = api_client.get(
+        '/groups/1',
+        headers={'Authorization': 'InvalidFormat token'}
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_get_group_expired_token(api_client, oauth_handler):
+    """Test GET /groups/{groupId} with expired token."""
+    oauth_handler.validate_token_raises(TokenExpiredError("Token expired"))
+
+    response = api_client.get(
+        '/groups/1',
+        headers={'Authorization': 'Bearer expired-token'}
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_get_group_invalid_token(api_client, oauth_handler):
+    """Test GET /groups/{groupId} with invalid token."""
+    oauth_handler.validate_token_raises(TokenInvalidError("Invalid token"))
+
+    response = api_client.get(
+        '/groups/1',
+        headers={'Authorization': 'Bearer invalid-token'}
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_get_group_not_found(api_client, oauth_handler):
+    """Test GET /groups/{groupId} when group doesn't exist."""
+    # Configure OAuth mock to return user ID 1 (Alice from sample data)
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.get(
+        '/groups/999',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 404, "Resource not found", "Group not found")
+
+
+def test_get_group_forbidden(api_client, oauth_handler):
+    """Test GET /groups/{groupId} when user is not a member - 
+       User 2 (Bob) accessing group 2 (roommates)."""
+    # Configure OAuth mock to return user ID 2 (Bob from sample data - NOT a member of group 2)
+    oauth_handler.validate_token_returns(2)
+
+    response = api_client.get(
+        '/groups/2',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 403, "Forbidden", "Access denied")
+
+
+def test_get_group_response_structure(api_client, oauth_handler):
+    """Test GET /groups/{groupId} response has correct structure - 
+       uses group 4 (study_group) with 5 members."""
+    # Configure OAuth mock to return user ID 2 (Bob from sample data - member of group 4)
+    oauth_handler.validate_token_returns(2)
+
+    response = api_client.get(
+        '/groups/4',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    data = assert_json_response(response, expected_status=200)
+    assert_group_json_is(data, "study_group")
+    # Verify structure
+    assert 'id' in data
+    assert 'name' in data
+    assert 'description' in data
+    assert 'createdBy' in data
+    assert 'members' in data
+    assert len(data['members']) == 5
+
+
+def test_get_group_null_description(api_client, oauth_handler):
+    """Test GET /groups/{groupId} handles null/empty description correctly - 
+       Group 5 (quick_split) has null description."""
+    # Configure OAuth mock to return user ID 9 (Iris from sample data - member of group 5)
+    oauth_handler.validate_token_returns(9)
+
+    response = api_client.get(
+        '/groups/5',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    data = assert_json_response(response, expected_status=200)
+    assert_group_json_is(data, "quick_split")
+    assert data['description'] == ""

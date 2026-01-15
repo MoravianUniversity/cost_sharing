@@ -13,24 +13,10 @@ assertions (e.g., assert_user_matches, assert_groups_are).
 import sqlite3
 from unittest.mock import MagicMock
 import pytest
-from helpers import assert_user_matches, assert_groups_are, assert_user_is, assert_group_matches
+from helpers import assert_user_matches, assert_groups_are, \
+    assert_user_is, assert_group_matches, assert_group_is
 from cost_sharing.db_storage import DatabaseCostStorage
-from cost_sharing.exceptions import (
-    DuplicateEmailError,
-    UserNotFoundError,
-    StorageException
-)
-
-
-def test_is_user_returns_true_for_existing_user(empty_db_storage):
-    """Test is_user returns True when user exists"""
-    empty_db_storage.create_user("test@example.com", "Test User")
-    assert empty_db_storage.is_user("test@example.com") is True
-
-
-def test_is_user_returns_false_for_nonexistent_user(empty_db_storage):
-    """Test is_user returns False when user does not exist"""
-    assert empty_db_storage.is_user("nonexistent@example.com") is False
+from cost_sharing.exceptions import StorageException
 
 
 def test_get_user_by_email_returns_user_when_exists(empty_db_storage):
@@ -40,10 +26,10 @@ def test_get_user_by_email_returns_user_when_exists(empty_db_storage):
     assert_user_matches(retrieved_user, created_user.id, "test@example.com", "Test User")
 
 
-def test_get_user_by_email_raises_user_not_found_error_when_not_exists(empty_db_storage):
-    """Test get_user_by_email raises UserNotFoundError when user does not exist"""
-    with pytest.raises(UserNotFoundError):
-        empty_db_storage.get_user_by_email("nonexistent@example.com")
+def test_get_user_by_email_returns_none_when_not_exists(empty_db_storage):
+    """Test get_user_by_email returns None when user does not exist"""
+    user = empty_db_storage.get_user_by_email("nonexistent@example.com")
+    assert user is None
 
 
 def test_create_user_returns_user_with_id_one_for_first_user(empty_db_storage):
@@ -58,11 +44,12 @@ def test_create_user_auto_increments_after_sample_data(db_storage_with_sample_da
     assert_user_matches(user, 12, "newuser@example.com", "New User")
 
 
-def test_create_user_raises_duplicate_email_error_for_existing_email(empty_db_storage):
-    """Test create_user raises DuplicateEmailError for duplicate email"""
+def test_create_user_raises_storage_exception_for_duplicate_email(empty_db_storage):
+    """Test create_user raises StorageException for duplicate email (IntegrityError wrapped)"""
     empty_db_storage.create_user("test@example.com", "Test User")
-    with pytest.raises(DuplicateEmailError):
+    with pytest.raises(StorageException) as exc_info:
         empty_db_storage.create_user("test@example.com", "Another User")
+    assert "Database error creating user" in str(exc_info.value)
 
 
 def test_create_user_auto_increments_ids_for_multiple_users(empty_db_storage):
@@ -83,37 +70,16 @@ def test_get_user_by_id_returns_user_when_exists(empty_db_storage):
     assert_user_matches(retrieved_user, created_user.id, "test@example.com", "Test User")
 
 
-def test_get_user_by_id_raises_user_not_found_error_when_not_exists(empty_db_storage):
-    """Test get_user_by_id raises UserNotFoundError for invalid ID"""
-    with pytest.raises(UserNotFoundError):
-        empty_db_storage.get_user_by_id(999)
+def test_get_user_by_id_returns_none_when_not_exists(empty_db_storage):
+    """Test get_user_by_id returns None for invalid ID"""
+    user = empty_db_storage.get_user_by_id(999)
+    assert user is None
 
-    with pytest.raises(UserNotFoundError):
-        empty_db_storage.get_user_by_id(0)
+    user = empty_db_storage.get_user_by_id(0)
+    assert user is None
 
-    with pytest.raises(UserNotFoundError):
-        empty_db_storage.get_user_by_id(-1)
-
-
-def test_create_and_retrieve_user_by_email(empty_db_storage):
-    """Test creating user and retrieving by email"""
-    created_user = empty_db_storage.create_user("test@example.com", "Test User")
-    retrieved_user = empty_db_storage.get_user_by_email("test@example.com")
-    assert_user_matches(retrieved_user, created_user.id, "test@example.com", "Test User")
-
-
-def test_create_and_retrieve_user_by_id(empty_db_storage):
-    """Test creating user and retrieving by ID"""
-    created_user = empty_db_storage.create_user("test@example.com", "Test User")
-    retrieved_user = empty_db_storage.get_user_by_id(created_user.id)
-    assert_user_matches(retrieved_user, created_user.id, "test@example.com", "Test User")
-
-
-def test_create_user_then_check_is_user(empty_db_storage):
-    """Test creating user and verifying with is_user"""
-    empty_db_storage.create_user("test@example.com", "Test User")
-    assert empty_db_storage.is_user("test@example.com") is True
-    assert empty_db_storage.is_user("nonexistent@example.com") is False
+    user = empty_db_storage.get_user_by_id(-1)
+    assert user is None
 
 
 def test_multiple_users_can_be_created_and_retrieved(empty_db_storage):
@@ -121,10 +87,6 @@ def test_multiple_users_can_be_created_and_retrieved(empty_db_storage):
     user1 = empty_db_storage.create_user("user1@example.com", "User One")
     user2 = empty_db_storage.create_user("user2@example.com", "User Two")
     user3 = empty_db_storage.create_user("user3@example.com", "User Three")
-
-    assert empty_db_storage.is_user("user1@example.com") is True
-    assert empty_db_storage.is_user("user2@example.com") is True
-    assert empty_db_storage.is_user("user3@example.com") is True
 
     retrieved1 = empty_db_storage.get_user_by_email("user1@example.com")
     retrieved2 = empty_db_storage.get_user_by_id(user2.id)
@@ -144,14 +106,6 @@ def create_error_storage():
     storage = DatabaseCostStorage(mock_conn)
     mock_conn.execute = MagicMock(side_effect=sqlite3.Error("Mock database error"))
     return storage
-
-
-def test_is_user_raises_storage_exception_on_database_error(error_storage):
-    """Test is_user raises StorageException when database error occurs"""
-    storage = error_storage
-
-    with pytest.raises(StorageException):
-        storage.is_user("test@example.com")
 
 
 def test_get_user_by_email_raises_storage_exception_on_database_error(error_storage):
@@ -215,7 +169,7 @@ def test_get_user_groups_raises_storage_exception_on_database_error(error_storag
 def test_create_group_returns_group_with_id_one_for_first_group(empty_db_storage):
     """Test create_group returns group with ID 1 for first group"""
     user = empty_db_storage.create_user("test@example.com", "Test User")
-    group = empty_db_storage.create_group(user.id, "Test Group", "Test description")
+    group = empty_db_storage.create_group("Test Group", "Test description", user.id)
     assert_group_matches(group, 1, "Test Group", "Test description", user, expected_member_count=1)
     assert_user_matches(group.members[0], user.id, "test@example.com", "Test User")
 
@@ -223,7 +177,7 @@ def test_create_group_returns_group_with_id_one_for_first_group(empty_db_storage
 def test_create_group_auto_increments_after_sample_data(db_storage_with_sample_data):
     """Test create_group auto-increments ID after sample data"""
     user = db_storage_with_sample_data.get_user_by_id(1)
-    group = db_storage_with_sample_data.create_group(user.id, "New Group", "New description")
+    group = db_storage_with_sample_data.create_group("New Group", "New description", user.id)
     assert_group_matches(group, 7, "New Group", "New description", user, expected_member_count=1)
     assert_user_is(group.members[0], "alice")
 
@@ -231,7 +185,7 @@ def test_create_group_auto_increments_after_sample_data(db_storage_with_sample_d
 def test_create_group_without_description(empty_db_storage):
     """Test create_group works without description"""
     user = empty_db_storage.create_user("test@example.com", "Test User")
-    group = empty_db_storage.create_group(user.id, "Test Group")
+    group = empty_db_storage.create_group("Test Group", None, user.id)
     assert_group_matches(group, 1, "Test Group", "", user, expected_member_count=1)
     assert_user_matches(group.members[0], user.id, "test@example.com", "Test User")
 
@@ -239,7 +193,7 @@ def test_create_group_without_description(empty_db_storage):
 def test_create_group_adds_creator_as_member(empty_db_storage):
     """Test create_group adds the creator as a member"""
     user = empty_db_storage.create_user("test@example.com", "Test User")
-    group = empty_db_storage.create_group(user.id, "Test Group")
+    group = empty_db_storage.create_group("Test Group", None, user.id)
 
     # Verify user is in the group
     user_groups = empty_db_storage.get_user_groups(user.id)
@@ -248,15 +202,63 @@ def test_create_group_adds_creator_as_member(empty_db_storage):
     assert_user_matches(user_groups[0].members[0], user.id, "test@example.com", "Test User")
 
 
-def test_create_group_raises_user_not_found_error_for_invalid_user(empty_db_storage):
-    """Test create_group raises UserNotFoundError when user doesn't exist"""
-    with pytest.raises(UserNotFoundError):
-        empty_db_storage.create_group(999, "Test Group")
+def test_create_group_raises_storage_exception_when_creator_not_found(empty_db_storage):
+    """Test create_group raises StorageException when creator user doesn't exist (line 206)"""
+    storage = empty_db_storage
+
+    # get_user_by_id will return None for non-existent user
+    with pytest.raises(StorageException) as exc_info:
+        storage.create_group("Test Group", None, 999)
+    assert "User with ID 999 not found" in str(exc_info.value)
 
 
 def test_create_group_raises_storage_exception_on_database_error(error_storage):
-    """Test create_group raises StorageException when database error occurs"""
+    """Test create_group raises StorageException when database error occurs during insert"""
     storage = error_storage
 
-    with pytest.raises(StorageException):
-        storage.create_group(1, "Test Group")
+    # This test exists to cover the except block in create_group, but we have to get past
+    # the get_user_by_id check.  This is a hack.  We need get_user_by_id to return a "User"
+    # so that we get past that check. I made it return a dict because I don't want to import
+    # the User model just for this test.
+    storage.get_user_by_id = MagicMock(return_value={"id":1,
+    "email":"test@example.com", "name":"Test User"})
+
+    with pytest.raises(StorageException) as exc_info:
+        storage.create_group("Test Group", None, 1)
+    assert "Database error creating group" in str(exc_info.value)
+
+
+def test_get_group_by_id_returns_group_with_creator_and_members(db_storage_with_sample_data):
+    """Test get_group_by_id returns group with creator and members populated"""
+    storage = db_storage_with_sample_data
+
+    # Get group 2 (Roommates Spring 2025)
+    group = storage.get_group_by_id(2)
+
+    # Verify group matches expected sample data
+    assert_group_is(group, "roommates")
+
+
+def test_get_group_by_id_returns_none_when_not_exists(empty_db_storage):
+    """Test get_group_by_id returns None when group doesn't exist"""
+    group = empty_db_storage.get_group_by_id(999)
+    assert group is None
+
+
+def test_get_group_by_id_handles_empty_description(db_storage_with_sample_data):
+    """Test get_group_by_id handles group with empty description correctly"""
+    storage = db_storage_with_sample_data
+
+    # Group 5 has null description in sample data
+    group = storage.get_group_by_id(5)
+
+    assert_group_is(group, "quick_split")
+
+
+def test_get_group_by_id_raises_storage_exception_on_database_error(error_storage):
+    """Test get_group_by_id raises StorageException when database error occurs (lines 282-283)"""
+    storage = error_storage
+
+    with pytest.raises(StorageException) as exc_info:
+        storage.get_group_by_id(1)
+    assert "Database error retrieving group by ID" in str(exc_info.value)

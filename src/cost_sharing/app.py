@@ -16,6 +16,10 @@ from cost_sharing.validation import (
     validate_optional_string,
     validate_required_query_param
 )
+from cost_sharing.exceptions import (
+    GroupNotFoundError,
+    ForbiddenError
+)
 
 
 # Ignore "too-many-statements" and "Too many local variables"
@@ -258,6 +262,55 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
                 for member in group.members
             ]
         }), 201
+
+    @app.route('/groups/<int:groupId>', methods=['GET'])
+    @require_auth
+    def get_group(groupId):  # pylint: disable=C0103
+        """
+        Get group details by ID.
+
+        Requires valid JWT token in Authorization header.
+        User must be a member of the group.
+        Returns group information including members.
+        """
+        # Get user_id from g (set by require_auth decorator)
+        user_id = g.user_id
+
+        try:
+            # Get group from application layer (includes membership check)
+            group = application.get_group_by_id(groupId, user_id)
+
+            # Return group in the format specified by API spec
+            return jsonify({
+                "id": group.id,
+                "name": group.name,
+                "description": group.description,
+                "createdBy": {
+                    "id": group.created_by.id,
+                    "email": group.created_by.email,
+                    "name": group.created_by.name
+                },
+                "members": [
+                    {
+                        "id": member.id,
+                        "email": member.email,
+                        "name": member.name
+                    }
+                    for member in group.members
+                ]
+            }), 200
+
+        except GroupNotFoundError:
+            return jsonify({
+                "error": "Resource not found",
+                "message": "Group not found"
+            }), 404
+
+        except ForbiddenError:
+            return jsonify({
+                "error": "Forbidden",
+                "message": "Access denied"
+            }), 403
 
     return app
 
