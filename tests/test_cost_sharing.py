@@ -13,9 +13,9 @@ assertions (e.g., assert_user_is, assert_groups_are).
 import pytest
 from helpers import (
     assert_user_is, assert_user_matches, assert_groups_are,
-    assert_group_matches
+    assert_group_matches, assert_group_is
 )
-from cost_sharing.exceptions import UserNotFoundError
+from cost_sharing.exceptions import UserNotFoundError, GroupNotFoundError, ForbiddenError
 
 
 def test_get_user_by_id_succeeds(app_with_sample_data):
@@ -114,3 +114,43 @@ def test_create_group_raises_user_not_found_error_for_invalid_user(app_empty_db)
     """Test create_group raises UserNotFoundError when user doesn't exist"""
     with pytest.raises(UserNotFoundError):
         app_empty_db.create_group(999, "Test Group")
+
+
+def test_get_group_by_id_returns_group_for_member(app_with_sample_data):
+    """Test get_group_by_id returns group when user is a member"""
+    app = app_with_sample_data
+
+    # User 1 (Alice) is a member of group 2 (Roommates Spring 2025)
+    group = app.get_group_by_id(2, 1)
+
+    assert_group_is(group, "roommates")
+
+
+def test_get_group_by_id_raises_forbidden_error_for_non_member(app_with_sample_data):
+    """Test get_group_by_id raises ForbiddenError when user is not a member"""
+    app = app_with_sample_data
+
+    # User 2 (Bob) is not a member of group 2 (Roommates Spring 2025)
+    with pytest.raises(ForbiddenError) as exc_info:
+        app.get_group_by_id(2, 2)
+    assert "You do not have access to this group" in str(exc_info.value)
+
+
+def test_get_group_by_id_raises_group_not_found_error_for_invalid_group(app_empty_db):
+    """Test get_group_by_id raises GroupNotFoundError when group doesn't exist"""
+    app = app_empty_db
+    user = app.get_or_create_user("test@example.com", "Test User")
+
+    with pytest.raises(GroupNotFoundError) as exc_info:
+        app.get_group_by_id(999, user.id)
+    assert "Group with ID 999 not found" in str(exc_info.value)
+
+
+def test_get_group_by_id_handles_empty_description(app_with_sample_data):
+    """Test get_group_by_id handles group with empty description correctly"""
+    app = app_with_sample_data
+
+    # User 9 (Iris) is a member of group 5 (Quick Split) which has null description
+    group = app.get_group_by_id(5, 9)
+
+    assert_group_is(group, "quick_split")

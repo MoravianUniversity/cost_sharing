@@ -1,5 +1,11 @@
 """Application layer for Cost Sharing system."""
 
+from cost_sharing.exceptions import (
+    UserNotFoundError,
+    GroupNotFoundError,
+    ForbiddenError
+)
+
 
 class CostSharing:
     """Application layer for Cost Sharing system."""
@@ -26,7 +32,10 @@ class CostSharing:
         Raises:
             UserNotFoundError: If user doesn't exist
         """
-        return self._storage.get_user_by_id(user_id)
+        user = self._storage.get_user_by_id(user_id)
+        if user is None:
+            raise UserNotFoundError(f"User with ID {user_id} not found")
+        return user
 
     def get_or_create_user(self, email, name):
         """
@@ -39,8 +48,9 @@ class CostSharing:
         Returns:
             User object (existing or newly created)
         """
-        if self._storage.is_user(email):
-            return self._storage.get_user_by_email(email)
+        user = self._storage.get_user_by_email(email)
+        if user is not None:
+            return user
         return self._storage.create_user(email, name)
 
     def get_user_groups(self, user_id):
@@ -70,4 +80,32 @@ class CostSharing:
         Raises:
             UserNotFoundError: If user with the given ID is not found
         """
-        return self._storage.create_group(user_id, name, description)
+        # Business logic: verify user exists - will raise UserNotFoundError if user does not exist
+        self.get_user_by_id(user_id)
+        return self._storage.create_group(name, description, user_id)
+
+    def get_group_by_id(self, group_id, user_id):
+        """
+        Get group by ID, ensuring the user is a member.
+
+        Args:
+            group_id: Group ID
+            user_id: User ID of the requesting user
+
+        Returns:
+            Group object with creator and members populated
+
+        Raises:
+            GroupNotFoundError: If group doesn't exist
+            ForbiddenError: If user is not a member of the group
+        """
+        group = self._storage.get_group_by_id(group_id)
+
+        if group is None:
+            raise GroupNotFoundError(f"Group with ID {group_id} not found")
+
+        user_ids = [member.id for member in group.members]
+        if user_id not in user_ids:
+            raise ForbiddenError("You do not have access to this group")
+
+        return group

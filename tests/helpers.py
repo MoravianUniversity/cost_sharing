@@ -16,8 +16,8 @@ Usage in tests:
     from helpers import (
         assert_user_is, assert_groups_are, assert_expenses_are,
         assert_expense_participants, assert_group_members,
-        assert_user_json, assert_group_json_full, assert_groups_json_response,
-        assert_error_response, create_test_user, create_test_group
+        assert_user_json, assert_groups_json_response,
+        assert_error_response, create_test_user
     )
     assert_user_is(user, "alice")
     assert_groups_are(groups, ["weekend_trip", "roommates"])
@@ -25,10 +25,9 @@ Usage in tests:
     assert_expense_participants(expense, [1, 2])
     assert_group_members(2, [3, 1, 4])
     data = assert_groups_json_response(response, expected_status=200)
-    assert_group_json_full(data['groups'][0], group)
 """
 
-from cost_sharing.models import User, Group
+from cost_sharing.models import User
 
 # Sample data constants matching sample-data.sql
 # These serve as the single source of truth for expected values in tests
@@ -424,36 +423,6 @@ def assert_user_json(user_json, user_id, email, name):
         f"Expected name {name}, got {user_json.get('name')}"
 
 
-def assert_group_json_full(group_json, group):
-    """
-    Assert JSON group object matches a Group model object.
-
-    Args:
-        group_json: JSON group object from API response
-        group: Group model object to compare against
-    """
-    assert group_json['id'] == group.id, \
-        f"Expected group ID {group.id}, got {group_json.get('id')}"
-    assert group_json['name'] == group.name, \
-        f"Expected group name '{group.name}', got '{group_json.get('name')}'"
-    assert group_json['description'] == group.description, \
-        f"Expected description '{group.description}', got '{group_json.get('description')}'"
-
-    # Check createdBy
-    assert 'createdBy' in group_json, "Group JSON missing 'createdBy' field"
-    assert_user_json(group_json['createdBy'], group.created_by.id,
-                     group.created_by.email, group.created_by.name)
-
-    # Check members
-    assert 'members' in group_json, "Group JSON missing 'members' field"
-    assert isinstance(group_json['members'], list), \
-        f"members should be a list, got {type(group_json['members'])}"
-    assert len(group_json['members']) == len(group.members), \
-        f"Expected {len(group.members)} members, got {len(group_json['members'])}"
-
-    for member_json, member in zip(group_json['members'], group.members):
-        assert_user_json(member_json, member.id, member.email, member.name)
-
 
 def assert_groups_json_response(response, expected_status=200):
     """
@@ -474,6 +443,42 @@ def assert_groups_json_response(response, expected_status=200):
     assert isinstance(data['groups'], list), \
         f"groups should be a list, got {type(data['groups'])}"
     return data
+
+
+def assert_group_json_is(group_json, group_key):  # pylint: disable=R0914
+    """
+    Assert JSON group object matches expected group from sample data.
+    
+    Args:
+        group_json: JSON group object from API response
+        group_key: Key from SAMPLE_GROUPS (e.g., "weekend_trip", "roommates")
+    """
+    expected = SAMPLE_GROUPS[group_key]
+    assert group_json['id'] == expected["id"], \
+        f"Expected group ID {expected['id']}, got {group_json.get('id')}"
+    assert group_json['name'] == expected["name"], \
+        f"Expected group name '{expected['name']}', got {group_json.get('name')}"
+    expected_desc = expected["description"] or ""
+    assert group_json['description'] == expected_desc, \
+        f"Expected group description '{expected_desc}', got {group_json.get('description')}"
+
+    # Check member count matches expected
+    expected_member_count = expected["member_count"]
+    assert len(group_json['members']) == expected_member_count, \
+        f"Expected member_count {expected_member_count}, got {len(group_json['members'])}"
+
+    # Check that creator is correct
+    # Creator IDs: 1->1, 2->3, 3->5, 4->8, 5->9, 6->10
+    creator_ids = {1: 1, 2: 3, 3: 5, 4: 8, 5: 9, 6: 10}
+    expected_creator_id = creator_ids[group_json['id']]
+    assert group_json['createdBy']['id'] == expected_creator_id, \
+        f"Expected creator ID {expected_creator_id}, got {group_json['createdBy'].get('id')}"
+
+    # Check that all expected members are present
+    expected_member_ids = sorted(SAMPLE_GROUP_MEMBERS[group_json['id']])
+    actual_member_ids = sorted([member['id'] for member in group_json['members']])
+    assert actual_member_ids == expected_member_ids, \
+        f"Expected member IDs {expected_member_ids}, got {actual_member_ids}"
 
 
 def assert_json_response(response, expected_status=200):
@@ -581,25 +586,3 @@ def create_test_user(user_id=1, email="test@example.com", name="Test User"):
         User object
     """
     return User(id=user_id, email=email, name=name)
-
-
-def create_test_group(group_id=1, name="Test Group", description="", creator=None, members=None):
-    """
-    Helper to create Group object for testing.
-
-    Args:
-        group_id: Group ID (default: 1)
-        name: Group name (default: "Test Group")
-        description: Group description (default: "")
-        creator: User object for creator (default: None, creates default user)
-        members: List of User objects for members (default: None, uses creator)
-
-    Returns:
-        Group object
-    """
-    if creator is None:
-        creator = create_test_user(user_id=1, email="creator@example.com", name="Creator")
-    if members is None:
-        members = [creator]
-    return Group(id=group_id, name=name, description=description,
-                 created_by=creator, members=members)
