@@ -282,3 +282,28 @@ class DatabaseCostStorage:
             )
         except sqlite3.Error as e:
             raise StorageException(f"Database error retrieving group by ID: {e}") from e
+
+    def add_group_member(self, group_id, user_id):
+        """
+        Add a user as a member to a group.
+
+        Args:
+            group_id: Group ID
+            user_id: User ID
+
+        Returns:
+            True if member was added successfully
+
+        Raises:
+            StorageException: If a database error occurs
+        """
+        try:
+            self._conn.execute(
+                'INSERT INTO group_members (group_id, user_id) VALUES (?, ?)',
+                (group_id, user_id)
+            )
+            self._conn.commit()
+            return True
+        except sqlite3.Error as e:
+            self._conn.rollback()
+            raise StorageException(f"Database error adding member: {e}") from e

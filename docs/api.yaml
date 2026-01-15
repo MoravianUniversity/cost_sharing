@@ -268,10 +268,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  member:
-                    $ref: '#/components/schemas/User'
+                $ref: '#/components/schemas/Group'
         '400':
           description: Validation error
           content:

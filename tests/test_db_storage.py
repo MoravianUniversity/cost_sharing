@@ -14,7 +14,7 @@ import sqlite3
 from unittest.mock import MagicMock
 import pytest
 from helpers import assert_user_matches, assert_groups_are, \
-    assert_user_is, assert_group_matches, assert_group_is
+    assert_user_is, assert_group_matches, assert_group_is, assert_group_has_members
 from cost_sharing.db_storage import DatabaseCostStorage
 from cost_sharing.exceptions import StorageException
 
@@ -262,3 +262,61 @@ def test_get_group_by_id_raises_storage_exception_on_database_error(error_storag
     with pytest.raises(StorageException) as exc_info:
         storage.get_group_by_id(1)
     assert "Database error retrieving group by ID" in str(exc_info.value)
+
+
+# ============================================================================
+# add_group_member Tests
+# ============================================================================
+
+def test_add_group_member_adds_member_to_existing_group_and_user(db_storage_with_sample_data):
+    """Test add_group_member successfully adds an existing user to an existing group"""
+    storage = db_storage_with_sample_data
+
+    # Group 1 has members [1, 2] (Alice, Bob) from sample data
+    # Add user 3 (Charlie) to group 1
+    result = storage.add_group_member(1, 3)
+    assert result is True
+
+    # Verify group now has members [1, 2, 3]
+    group = storage.get_group_by_id(1)
+    assert_group_has_members(group, [1, 2, 3])
+
+
+def test_add_group_member_fails_for_nonexistent_group(db_storage_with_sample_data):
+    """Test add_group_member raises StorageException when group doesn't exist"""
+    storage = db_storage_with_sample_data
+
+    # Try to add existing user (user 1) to non-existent group
+    with pytest.raises(StorageException) as exc_info:
+        storage.add_group_member(999, 1)
+    assert "Database error adding member" in str(exc_info.value)
+
+
+def test_add_group_member_fails_for_nonexistent_user(db_storage_with_sample_data):
+    """Test add_group_member raises StorageException when user doesn't exist"""
+    storage = db_storage_with_sample_data
+
+    # Try to add non-existent user to existing group (group 1)
+    with pytest.raises(StorageException) as exc_info:
+        storage.add_group_member(1, 999)
+    assert "Database error adding member" in str(exc_info.value)
+
+
+def test_add_group_member_fails_for_duplicate_member(db_storage_with_sample_data):
+    """Test add_group_member raises StorageException when user is already a member"""
+    storage = db_storage_with_sample_data
+
+    # Group 2 has members [3, 1, 4] (Charlie, Alice, David) from sample data
+    # Try to add Alice (user 1) again
+    with pytest.raises(StorageException) as exc_info:
+        storage.add_group_member(2, 1)
+    assert "Database error adding member" in str(exc_info.value)
+
+
+def test_add_group_member_fails_on_database_error(error_storage):
+    """Test add_group_member raises StorageException when database error occurs"""
+    storage = error_storage
+
+    with pytest.raises(StorageException) as exc_info:
+        storage.add_group_member(1, 1)
+    assert "Database error adding member" in str(exc_info.value)

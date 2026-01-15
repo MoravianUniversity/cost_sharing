@@ -369,6 +369,12 @@ function renderGroupDetails(group) {
         descriptionEl.style.display = 'none';
     }
 
+    // Show "Add Member" button (all members can add other members)
+    const addMemberButton = document.getElementById('group-details-add-member');
+    if (addMemberButton) {
+        addMemberButton.style.display = 'block';
+    }
+
     // Render members
     renderGroupMembers(group.members || [], group.createdBy || null);
 }
@@ -399,6 +405,204 @@ function renderGroupMembers(members, creator) {
             </div>
         `;
     }).join('');
+}
+
+function handleAddMember() {
+    if (!currentGroup) {
+        showError('No group selected');
+        return;
+    }
+    showAddMemberModal();
+}
+
+function showAddMemberModal() {
+    // Create modal if it doesn't exist
+    let modalOverlay = document.getElementById('add-member-modal');
+    if (!modalOverlay) {
+        modalOverlay = document.createElement('div');
+        modalOverlay.id = 'add-member-modal';
+        modalOverlay.className = 'modal-overlay';
+        modalOverlay.innerHTML = `
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>Add Member</h2>
+                    <button class="modal-close" onclick="closeAddMemberModal()">&times;</button>
+                </div>
+                <form id="add-member-form" onsubmit="submitAddMember(event)">
+                    <div class="form-group">
+                        <label for="member-email">Email <span class="required">*</span></label>
+                        <input type="email" id="member-email" name="email" required placeholder="user@example.com">
+                        <small class="form-help">Required. A user account will be created if it doesn't exist.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="member-name">Name <span class="required">*</span></label>
+                        <input type="text" id="member-name" name="name" required placeholder="Full Name">
+                        <small class="form-help">Required. The member's full name.</small>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="secondary" onclick="closeAddMemberModal()">Cancel</button>
+                        <button type="submit">Add Member</button>
+                    </div>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(modalOverlay);
+        
+        // Close modal when clicking outside
+        modalOverlay.addEventListener('click', function(event) {
+            if (event.target === modalOverlay) {
+                closeAddMemberModal();
+            }
+        });
+    }
+    modalOverlay.classList.add('active');
+    document.getElementById('member-email').focus();
+}
+
+function closeAddMemberModal() {
+    const modalOverlay = document.getElementById('add-member-modal');
+    if (modalOverlay) {
+        modalOverlay.classList.remove('active');
+        const form = document.getElementById('add-member-form');
+        if (form) {
+            form.reset();
+        }
+        // Clear any validation errors
+        clearFormErrors('add-member-form');
+    }
+}
+
+function submitAddMember(event) {
+    event.preventDefault();
+    
+    if (!currentToken) {
+        showError('You must be logged in to add a member');
+        return;
+    }
+
+    if (!currentGroup) {
+        showError('No group selected');
+        return;
+    }
+
+    const form = event.target;
+    const formData = new FormData(form);
+    const email = formData.get('email').trim();
+    const name = formData.get('name').trim();
+
+    // Clear previous errors
+    clearFormErrors('add-member-form');
+
+    // Validate email
+    if (!email || email.length === 0) {
+        showFormError('member-email', 'Email is required');
+        return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        showFormError('member-email', 'Email must be a valid email address');
+        return;
+    }
+
+    // Validate name
+    if (!name || name.length === 0) {
+        showFormError('member-name', 'Name is required');
+        return;
+    }
+
+    // Check if email is already in the group (client-side validation to avoid 409)
+    if (currentGroup && currentGroup.members) {
+        const existingMember = currentGroup.members.find(member => 
+            member.email.toLowerCase() === email.toLowerCase()
+        );
+        if (existingMember) {
+            showFormError('member-email', 'This user is already a member of this group');
+            return;
+        }
+    }
+
+    // Prepare request body
+    const requestBody = {
+        email: email,
+        name: name
+    };
+
+    // Disable form during submission
+    const submitButton = form.querySelector('button[type="submit"]');
+    const originalText = submitButton.textContent;
+    submitButton.disabled = true;
+    submitButton.textContent = 'Adding...';
+
+    fetch(`${API_BASE}/groups/${currentGroup.id}/members`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${currentToken}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+    })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Failed to add member');
+                });
+            }
+            return response.json();
+        })
+        .then(group => {
+            // Update currentGroup with the returned group
+            currentGroup = group;
+            closeAddMemberModal();
+            // Re-render group details with updated members
+            renderGroupDetails(group);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError(error.message || 'Failed to add member');
+        })
+        .finally(() => {
+            submitButton.disabled = false;
+            submitButton.textContent = originalText;
+        });
+}
+
+function showFormError(fieldId, message) {
+    const field = document.getElementById(fieldId);
+    if (!field) {
+        return;
+    }
+
+    // Remove existing error
+    const existingError = field.parentElement.querySelector('.field-error');
+    if (existingError) {
+        existingError.remove();
+    }
+
+    // Add error styling
+    field.classList.add('field-error-input');
+    
+    // Add error message
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'field-error';
+    errorDiv.textContent = message;
+    field.parentElement.appendChild(errorDiv);
+}
+
+function clearFormErrors(formId) {
+    const form = document.getElementById(formId);
+    if (!form) {
+        return;
+    }
+
+    // Remove all error styling and messages
+    form.querySelectorAll('.field-error-input').forEach(field => {
+        field.classList.remove('field-error-input');
+    });
+    form.querySelectorAll('.field-error').forEach(error => {
+        error.remove();
+    });
 }
 
 function showGroupDetailsView() {

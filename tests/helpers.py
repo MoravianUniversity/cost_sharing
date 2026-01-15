@@ -401,6 +401,20 @@ def assert_group_members(group_id, actual_member_ids):
         f"Expected group {group_id} members {expected_member_ids}, got {actual_sorted}"
 
 
+def assert_group_has_members(group, expected_member_ids):
+    """
+    Assert group has the expected members.
+    
+    Args:
+        group: Group object to check
+        expected_member_ids: List of expected member user IDs
+    """
+    actual_member_ids = sorted([member.id for member in group.members])
+    expected_sorted = sorted(expected_member_ids)
+    assert actual_member_ids == expected_sorted, \
+        f"Expected group {group.id} members {expected_sorted}, got {actual_member_ids}"
+
+
 # ============================================================================
 # JSON Response Assertion Helpers
 # ============================================================================

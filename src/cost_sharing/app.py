@@ -3,6 +3,7 @@ import sys
 import functools
 import sqlite3
 from flask import Flask, request, jsonify, g, render_template
+from email_validator import validate_email, EmailNotValidError
 from dotenv import load_dotenv
 from cost_sharing.oauth_handler import (
     OAuthHandler, OAuthCodeError, OAuthVerificationError,
@@ -18,7 +19,8 @@ from cost_sharing.validation import (
 )
 from cost_sharing.exceptions import (
     GroupNotFoundError,
-    ForbiddenError
+    ForbiddenError,
+    ConflictError
 )
 
 
@@ -311,6 +313,87 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
                 "error": "Forbidden",
                 "message": "Access denied"
             }), 403
+
+    @app.route('/groups/<int:groupId>/members', methods=['POST'])
+    @require_auth
+    def add_group_member(groupId):  # pylint: disable=C0103, R0911, R0912
+        """
+        Add a member to a group by email.
+
+        Requires valid JWT token in Authorization header.
+        Caller must be a member of the group.
+        Request body must contain 'email' and 'name'.
+        Creates user account if user doesn't exist.
+        Returns 201 with Group object including updated members.
+        """
+        # Get user_id from g (set by require_auth decorator)
+        user_id = g.user_id
+
+        # Validate JSON body
+        data, error = validate_json_body(request)
+        if error is not None:
+            return error
+
+        # Validate email
+        email, error = validate_required_string(data, 'email')
+        if error is not None:
+            return error
+
+        # Validate email format (check format only, not deliverability)
+        try:
+            validate_email(email, check_deliverability=False)
+        except EmailNotValidError:
+            return jsonify({
+                "error": "Validation failed",
+                "message": "email must be a valid email address"
+            }), 400
+
+        # Validate name
+        name, error = validate_required_string(data, 'name')
+        if error is not None:
+            return error
+
+        try:
+            # Add member to group via application layer
+            group = application.add_group_member(groupId, user_id, email, name)
+
+            # Return group in the format specified by API spec
+            return jsonify({
+                "id": group.id,
+                "name": group.name,
+                "description": group.description,
+                "createdBy": {
+                    "id": group.created_by.id,
+                    "email": group.created_by.email,
+                    "name": group.created_by.name
+                },
+                "members": [
+                    {
+                        "id": member.id,
+                        "email": member.email,
+                        "name": member.name
+                    }
+                    for member in group.members
+                ]
+            }), 201
+
+        except GroupNotFoundError:
+            return jsonify({
+                "error": "Resource not found",
+                "message": "Group not found"
+            }), 404
+
+        except ForbiddenError:
+            return jsonify({
+                "error": "Forbidden",
+                "message": "Access denied"
+            }), 403
+
+        except ConflictError:
+            return jsonify({
+                "error": "Conflict",
+                "message": "User is already a member of this group"
+            }), 409
 
     return app
 
