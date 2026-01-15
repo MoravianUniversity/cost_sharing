@@ -10,7 +10,7 @@
     <nav id="navigation" class="hidden">
         <h1>Cost Sharing</h1>
         <div class="nav-links">
-            <a href="#">My Groups</a>
+            <a href="#" onclick="showGroupsList(); return false;">My Groups</a>
             <span class="user-name" id="nav-user-name"></span>
             <button class="logout small" onclick="logout()">Logout</button>
         </div>
@@ -24,18 +24,66 @@
         </div>
         
         <div id="groups-section" class="hidden">
-            <div class="page-header">
-                <div>
-                    <h2>My Groups</h2>
-                    <p>Select a group to view details, expenses, and balances.</p>
+            <div id="groups-list-view">
+                <div class="page-header">
+                    <div>
+                        <h2>My Groups</h2>
+                        <p>Select a group to view details, expenses, and balances.</p>
+                    </div>
+                    <div class="page-actions">
+                        <button onclick="handleCreateGroup()">Create Group</button>
+                    </div>
                 </div>
-                <div class="page-actions">
-                    <button onclick="handleCreateGroup()">Create Group</button>
+                
+                <div id="groups-list" class="groups-list">
+                    <!-- Groups will be dynamically inserted here -->
                 </div>
             </div>
-            
-            <div id="groups-list" class="groups-list">
-                <!-- Groups will be dynamically inserted here -->
+
+            <div id="group-details-view" class="hidden">
+                <div class="group-header">
+                    <div>
+                        <h2 id="group-details-name"></h2>
+                        <p class="group-description" id="group-details-description"></p>
+                    </div>
+                    <div class="group-actions">
+                        <button id="group-details-add-expense" style="display: none;">Add Expense</button>
+                    </div>
+                </div>
+
+                <div class="tabs">
+                    <button class="tab active" onclick="switchTab('members')">Members</button>
+                    <button class="tab" onclick="switchTab('expenses')">Expenses</button>
+                    <button class="tab" onclick="switchTab('balances')">Balances</button>
+                </div>
+
+                <div id="tab-members" class="tab-content active">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                        <div>
+                            <h3>Group Members</h3>
+                            <p style="margin: 0;">Manage members of this group.</p>
+                        </div>
+                        <div>
+                            <button id="group-details-add-member" style="display: none;">Add Member</button>
+                        </div>
+                    </div>
+                    
+                    <div id="group-details-members" class="members-list">
+                        <!-- Members will be dynamically inserted here -->
+                    </div>
+                </div>
+
+                <div id="tab-expenses" class="tab-content">
+                    <h3>Expenses</h3>
+                    <p>View and manage expenses for this group.</p>
+                    <p style="color: #6c757d; font-style: italic;">Expense management coming soon.</p>
+                </div>
+
+                <div id="tab-balances" class="tab-content">
+                    <h3>Balances</h3>
+                    <p>Current balances for this group.</p>
+                    <p style="color: #6c757d; font-style: italic;">Balance calculations coming soon.</p>
+                </div>
             </div>
         </div>
     </div>
