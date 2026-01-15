@@ -13,7 +13,8 @@ assertions (e.g., assert_user_is, assert_groups_are).
 import pytest
 from helpers import (
     assert_user_is, assert_user_matches, assert_groups_are,
-    assert_group_matches, assert_group_is, assert_group_has_members
+    assert_group_matches, assert_group_is, assert_group_has_members,
+    assert_expenses_are, assert_expense_participants
 )
 from cost_sharing.exceptions import (
     UserNotFoundError, GroupNotFoundError, ForbiddenError, ConflictError
@@ -240,3 +241,106 @@ def test_add_group_member_raises_conflict_error_for_duplicate_member(app_with_sa
     with pytest.raises(ConflictError) as exc_info:
         app.add_group_member(2, 1, "alice@school.edu", "Alice")
     assert "User is already a member of this group" in str(exc_info.value)
+
+
+# ============================================================================
+# get_group_expenses Tests
+# ============================================================================
+
+def test_get_group_expenses_returns_empty_list_when_no_expenses(app_with_sample_data):
+    """Test get_group_expenses returns empty list when group has no expenses"""
+    app = app_with_sample_data
+    # Group 1 (weekend_trip) has no expenses, user 1 (Alice) is a member
+    expenses = app.get_group_expenses(1, 1)
+    assert expenses == []
+
+
+def test_get_group_expenses_returns_single_expense(app_with_sample_data):
+    """Test get_group_expenses returns single expense when group has one expense"""
+    app = app_with_sample_data
+    # Group 3 has one expense (team_lunch), user 5 (Eve) is a member
+    expenses = app.get_group_expenses(3, 5)
+    assert_expenses_are(expenses, ["team_lunch"])
+    # Team lunch: $45.67 split between 2 people = $22.84 (rounded)
+    assert expenses[0].per_person_amount == 22.84
+
+
+def test_get_group_expenses_returns_multiple_expenses(app_with_sample_data):
+    """Test get_group_expenses returns multiple expenses when group has multiple expenses"""
+    app = app_with_sample_data
+    # Group 2 has 4 expenses, user 1 (Alice) is a member
+    expenses = app.get_group_expenses(2, 1)
+    assert_expenses_are(expenses, ["grocery_shopping", "utilities_bill",
+                                   "restaurant_dinner", "internet_bill"])
+
+
+def test_get_group_expenses_calculates_per_person_amount(app_with_sample_data):
+    """Test get_group_expenses calculates per_person_amount correctly"""
+    app = app_with_sample_data
+    expenses = app.get_group_expenses(2, 1)
+
+    # First expense: Grocery shopping $86.40 split between 2 people = $43.20
+    assert expenses[0].per_person_amount == 43.20
+
+    # Second expense: Utilities bill $120.00 split between 2 people = $60.00
+    assert expenses[1].per_person_amount == 60.00
+
+    # Third expense: Restaurant dinner $67.89 split between 2 people = $33.95 (rounded)
+    assert expenses[2].per_person_amount == 33.95
+
+    # Fourth expense: Internet bill $100.00 split between 3 people = $33.33 (rounded)
+    assert expenses[3].per_person_amount == 33.33
+
+
+def test_get_group_expenses_handles_rounding_correctly(app_with_sample_data):
+    """Test get_group_expenses handles rounding correctly (e.g., $100 / 3 = $33.33)"""
+    app = app_with_sample_data
+    expenses = app.get_group_expenses(2, 1)
+
+    # Internet bill: $100.00 / 3 = $33.333... rounded to $33.33
+    internet_bill = [e for e in expenses if e.id == 4][0]
+    assert internet_bill.per_person_amount == 33.33
+    assert len(internet_bill.split_between) == 3
+
+
+def test_get_group_expenses_raises_group_not_found_error(app_with_sample_data):
+    """Test get_group_expenses raises GroupNotFoundError when group doesn't exist"""
+    app = app_with_sample_data
+
+    with pytest.raises(GroupNotFoundError) as exc_info:
+        app.get_group_expenses(999, 1)
+    assert "Group with ID 999 not found" in str(exc_info.value)
+
+
+def test_get_group_expenses_raises_forbidden_error_for_non_member(app_with_sample_data):
+    """Test get_group_expenses raises ForbiddenError when user is not a member"""
+    app = app_with_sample_data
+
+    # User 2 (Bob) is not a member of group 2 (Roommates Spring 2025)
+    with pytest.raises(ForbiddenError) as exc_info:
+        app.get_group_expenses(2, 2)
+    assert "You do not have access to this group" in str(exc_info.value)
+
+
+def test_get_group_expenses_with_many_participants(app_with_sample_data):
+    """Test get_group_expenses correctly calculates per_person_amount with many participants"""
+    app = app_with_sample_data
+    # Group 4 has expenses, user 8 (Helen) is a member
+    expenses = app.get_group_expenses(4, 8)
+
+    # Textbooks expense: $250.00 split between 5 people = $50.00
+    textbooks_expense = [e for e in expenses if e.id == 6][0]
+    assert textbooks_expense.per_person_amount == 50.00
+    assert_expense_participants(textbooks_expense, [8, 9, 10, 11, 2])
+
+
+def test_get_group_expenses_all_expenses_have_per_person_amount(app_with_sample_data):
+    """Test get_group_expenses ensures all expenses have per_person_amount calculated"""
+    app = app_with_sample_data
+    expenses = app.get_group_expenses(2, 1)
+
+    # All expenses should have per_person_amount calculated (not None)
+    for expense in expenses:
+        assert expense.per_person_amount is not None
+        assert isinstance(expense.per_person_amount, float)
+        assert expense.per_person_amount > 0

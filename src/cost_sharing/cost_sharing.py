@@ -145,3 +145,31 @@ class CostSharing:
 
         # Return updated group
         return self._storage.get_group_by_id(group_id)
+
+    def get_group_expenses(self, group_id, user_id):
+        """
+        Get all expenses for a group, ensuring the user is a member.
+
+        Args:
+            group_id: Group ID
+            user_id: User ID of the requesting user (must be a member)
+
+        Returns:
+            List of Expense objects with per_person_amount calculated
+
+        Raises:
+            GroupNotFoundError: If group doesn't exist
+            ForbiddenError: If user is not a member of the group
+        """
+        # Verify authorization (raises GroupNotFoundError or ForbiddenError if invalid)
+        self.get_group_by_id(group_id, user_id)
+
+        # Get expenses from storage
+        expenses = self._storage.get_group_expenses(group_id)
+
+        # Calculate per_person_amount for each expense
+        for expense in expenses:
+            num_participants = len(expense.split_between)
+            expense.per_person_amount = round(expense.amount / num_participants, 2)
+
+        return expenses

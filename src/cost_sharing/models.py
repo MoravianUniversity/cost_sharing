@@ -22,3 +22,17 @@ class Group:
     description: str
     created_by: User
     members: List[User]
+
+
+# R0902 indicates too many instance variables but we need it to match the database schema
+@dataclass
+class Expense:  # pylint: disable=R0902
+    """Expense model representing an expense in a group"""
+    id: int
+    group_id: int
+    description: str
+    amount: float
+    date: str
+    paid_by: User
+    split_between: List[User]
+    per_person_amount: float = None

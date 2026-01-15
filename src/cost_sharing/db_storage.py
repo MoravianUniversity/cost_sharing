@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from cost_sharing.models import User, Group
+from cost_sharing.models import User, Group, Expense
 from cost_sharing.exceptions import StorageException
 
 
@@ -307,3 +307,85 @@ class DatabaseCostStorage:
         except sqlite3.Error as e:
             self._conn.rollback()
             raise StorageException(f"Database error adding member: {e}") from e
+
+    def get_group_expenses(self, group_id):
+        """
+        Get all expenses for a group.
+
+        Args:
+            group_id: Group ID
+
+        Returns:
+            List of Expense objects with paidBy and splitBetween populated.
+            Returns empty list if group has no expenses or group doesn't exist.
+
+        Raises:
+            StorageException: If a database error occurs
+        """
+        try:
+            # Get all expenses for the group with paidBy user info
+            expense_rows = self._get_expenses_with_payer_info(group_id)
+            expenses = []
+            for row in expense_rows:
+                # Get participants for this expense
+                participants = self._get_expense_participants(row['id'])
+                # Build paidBy user
+                payer = User(
+                    id=row['payer_id'],
+                    email=row['payer_email'],
+                    name=row['payer_name']
+                )
+                # Build Expense object
+                expenses.append(Expense(
+                    id=row['id'],
+                    group_id=row['group_id'],
+                    description=row['description'],
+                    amount=float(row['amount']),
+                    date=row['expense_date'],
+                    paid_by=payer,
+                    split_between=participants
+                ))
+            return expenses
+        except sqlite3.Error as e:
+            raise StorageException(f"Database error retrieving group expenses: {e}") from e
+
+    def _get_expenses_with_payer_info(self, group_id):
+        """
+        Private helper to get all expenses for a group with payer user information.
+        """
+        cursor = self._conn.execute(
+            '''
+            SELECT e.id, e.group_id, e.description, e.amount, e.expense_date,
+                   payer.id as payer_id, payer.email as payer_email, payer.name as payer_name
+            FROM expenses e
+            INNER JOIN users payer ON e.paid_by_user_id = payer.id
+            WHERE e.group_id = ?
+            ORDER BY e.expense_date, e.id
+            ''',
+            (group_id,)
+        )
+        return cursor.fetchall()
+
+    def _get_expense_participants(self, expense_id):
+        """
+        Private helper to get all users who are participants in the given expense.
+        """
+        participants_cursor = self._conn.execute(
+            '''
+            SELECT u.id, u.email, u.name
+            FROM expense_participants ep
+            INNER JOIN users u ON ep.user_id = u.id
+            WHERE ep.expense_id = ?
+            ORDER BY u.id
+            ''',
+            (expense_id,)
+        )
+        participant_rows = participants_cursor.fetchall()
+        return [
+            User(
+                id=participant_row['id'],
+                email=participant_row['email'],
+                name=participant_row['name']
+            )
+            for participant_row in participant_rows
+        ]

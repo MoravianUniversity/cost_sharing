@@ -1,3 +1,5 @@
+# pylint: disable=C0302
+
 import pytest
 from oauth_handler_mock import OAuthHandlerMock
 from helpers import (
@@ -893,3 +895,209 @@ def test_add_group_member_conflict(api_client, oauth_handler):
     )
 
     assert_error_response(response, 409, "Conflict", "User is already a member of this group")
+
+
+# ============================================================================
+# GET /groups/{groupId}/expenses Tests
+# ============================================================================
+
+def test_get_group_expenses_success(api_client, oauth_handler): # pylint: disable=R0915
+    """Test successful expense retrieval - User 1 (Alice) accessing group 2 (roommates)."""
+    # Configure OAuth mock to return user ID 1 (Alice from sample data - member of group 2)
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.get(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    data = assert_json_response(response, expected_status=200)
+    assert 'expenses' in data
+    assert isinstance(data['expenses'], list)
+    assert len(data['expenses']) == 4
+
+    # Verify first expense structure
+    expense = data['expenses'][0]
+    assert 'id' in expense
+    assert 'groupId' in expense
+    assert 'description' in expense
+    assert 'amount' in expense
+    assert 'date' in expense
+    assert 'paidBy' in expense
+    assert 'splitBetween' in expense
+    assert 'perPersonAmount' in expense
+
+    # Verify paidBy is a User object
+    assert 'id' in expense['paidBy']
+    assert 'email' in expense['paidBy']
+    assert 'name' in expense['paidBy']
+
+    # Verify splitBetween is an array of User objects
+    assert isinstance(expense['splitBetween'], list)
+    assert len(expense['splitBetween']) > 0
+    assert 'id' in expense['splitBetween'][0]
+    assert 'email' in expense['splitBetween'][0]
+    assert 'name' in expense['splitBetween'][0]
+
+
+def test_get_group_expenses_empty_list(api_client, oauth_handler):
+    """Test GET /groups/{groupId}/expenses when group has no expenses."""
+    # Group 1 (weekend_trip) has no expenses, user 1 (Alice) is a member
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.get(
+        '/groups/1/expenses',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    data = assert_json_response(response, expected_status=200)
+    assert 'expenses' in data
+    assert isinstance(data['expenses'], list)
+    assert len(data['expenses']) == 0
+
+
+def test_get_group_expenses_single_expense(api_client, oauth_handler):
+    """Test GET /groups/{groupId}/expenses when group has one expense."""
+    # Group 3 has one expense (team_lunch), user 5 (Eve) is a member
+    oauth_handler.validate_token_returns(5)
+
+    response = api_client.get(
+        '/groups/3/expenses',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    data = assert_json_response(response, expected_status=200)
+    assert 'expenses' in data
+    assert isinstance(data['expenses'], list)
+    assert len(data['expenses']) == 1
+
+    expense = data['expenses'][0]
+    assert expense['description'] == "Team lunch"
+    assert expense['amount'] == 45.67
+    assert expense['perPersonAmount'] is not None
+
+
+def test_get_group_expenses_missing_header(api_client):
+    """Test GET /groups/{groupId}/expenses without Authorization header."""
+    response = api_client.get('/groups/2/expenses')
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_get_group_expenses_invalid_header_format(api_client):
+    """Test GET /groups/{groupId}/expenses with invalid Authorization header format."""
+    response = api_client.get(
+        '/groups/2/expenses',
+        headers={'Authorization': 'InvalidFormat token'}
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_get_group_expenses_expired_token(api_client, oauth_handler):
+    """Test GET /groups/{groupId}/expenses with expired token."""
+    oauth_handler.validate_token_raises(TokenExpiredError("Token expired"))
+
+    response = api_client.get(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer expired-token'}
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_get_group_expenses_invalid_token(api_client, oauth_handler):
+    """Test GET /groups/{groupId}/expenses with invalid token."""
+    oauth_handler.validate_token_raises(TokenInvalidError("Invalid token"))
+
+    response = api_client.get(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer invalid-token'}
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_get_group_expenses_group_not_found(api_client, oauth_handler):
+    """Test GET /groups/{groupId}/expenses when group doesn't exist."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.get(
+        '/groups/999/expenses',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 404, "Resource not found", "Group not found")
+
+
+def test_get_group_expenses_forbidden(api_client, oauth_handler):
+    """Test GET /groups/{groupId}/expenses when user is not a member."""
+    # User 2 (Bob) is NOT a member of group 2 (roommates)
+    oauth_handler.validate_token_returns(2)
+
+    response = api_client.get(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 403, "Forbidden", "Access denied")
+
+
+def test_get_group_expenses_response_structure(api_client, oauth_handler): # pylint: disable=R0915
+    """Test GET /groups/{groupId}/expenses response has correct structure."""
+    # User 1 (Alice) is a member of group 2 (roommates) with 4 expenses
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.get(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    data = assert_json_response(response, expected_status=200)
+    assert 'expenses' in data
+    assert isinstance(data['expenses'], list)
+    assert len(data['expenses']) == 4
+
+    # Verify all expenses have required fields
+    for expense in data['expenses']:
+        assert isinstance(expense['id'], int)
+        assert isinstance(expense['groupId'], int)
+        assert isinstance(expense['description'], str)
+        assert isinstance(expense['amount'], (int, float))
+        assert isinstance(expense['date'], str)
+        assert isinstance(expense['paidBy'], dict)
+        assert isinstance(expense['splitBetween'], list)
+        assert isinstance(expense['perPersonAmount'], (int, float))
+        assert expense['perPersonAmount'] is not None
+
+        # Verify paidBy structure
+        assert 'id' in expense['paidBy']
+        assert 'email' in expense['paidBy']
+        assert 'name' in expense['paidBy']
+
+        # Verify splitBetween structure
+        assert len(expense['splitBetween']) > 0
+        for user in expense['splitBetween']:
+            assert 'id' in user
+            assert 'email' in user
+            assert 'name' in user
+
+
+def test_get_group_expenses_with_many_participants(api_client, oauth_handler):
+    """Test GET /groups/{groupId}/expenses with expenses that have many participants."""
+    # User 8 (Helen) is a member of group 4 (study_group) with expenses
+    oauth_handler.validate_token_returns(8)
+
+    response = api_client.get(
+        '/groups/4/expenses',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    data = assert_json_response(response, expected_status=200)
+    assert 'expenses' in data
+    assert len(data['expenses']) == 4
+
+    # Find textbooks expense (split between 5 people)
+    textbooks_expense = [e for e in data['expenses'] if e['description'] == 'Textbooks'][0]
+    assert len(textbooks_expense['splitBetween']) == 5
+    assert textbooks_expense['perPersonAmount'] is not None

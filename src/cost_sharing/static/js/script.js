@@ -375,8 +375,20 @@ function renderGroupDetails(group) {
         addMemberButton.style.display = 'block';
     }
 
+    // Show "Add Expense" button (all members can add expenses)
+    const addExpenseButton = document.getElementById('group-details-add-expense');
+    if (addExpenseButton) {
+        addExpenseButton.style.display = 'block';
+    }
+
     // Render members
     renderGroupMembers(group.members || [], group.createdBy || null);
+    
+    // If expenses tab is active, fetch expenses
+    const expensesTab = document.getElementById('tab-expenses');
+    if (expensesTab && expensesTab.classList.contains('active')) {
+        fetchGroupExpenses(group.id);
+    }
 }
 
 function renderGroupMembers(members, creator) {
@@ -413,6 +425,254 @@ function handleAddMember() {
         return;
     }
     showAddMemberModal();
+}
+
+function handleAddExpense() {
+    if (!currentGroup) {
+        showError('No group selected');
+        return;
+    }
+    if (!currentUser) {
+        showError('You must be logged in to add an expense');
+        return;
+    }
+    showAddExpenseModal();
+}
+
+function showAddExpenseModal() {
+    if (!currentGroup || !currentUser) {
+        return;
+    }
+
+    // Create modal if it doesn't exist
+    let modalOverlay = document.getElementById('add-expense-modal');
+    if (!modalOverlay) {
+        modalOverlay = document.createElement('div');
+        modalOverlay.id = 'add-expense-modal';
+        modalOverlay.className = 'modal-overlay';
+        modalOverlay.innerHTML = `
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>Create Expense</h2>
+                    <button class="modal-close" onclick="closeAddExpenseModal()">&times;</button>
+                </div>
+                <p>You (${escapeHtml(currentUser.name)}) will be recorded as the person who paid for this expense.</p>
+                <form id="add-expense-form" onsubmit="submitAddExpense(event)">
+                    <div class="form-group">
+                        <label for="expense-description">Description <span class="required">*</span></label>
+                        <input type="text" id="expense-description" name="description" required 
+                               placeholder="e.g., Grocery shopping" maxlength="200">
+                        <small class="form-help">Required. 1-200 characters.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="expense-amount">Amount ($) <span class="required">*</span></label>
+                        <input type="number" id="expense-amount" name="amount" step="0.01" min="0.01" 
+                               placeholder="0.00" required>
+                        <small class="form-help">Required. Minimum $0.01.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="expense-date">Date <span class="required">*</span></label>
+                        <input type="date" id="expense-date" name="date" required>
+                        <small class="form-help">Required. Date when the expense occurred.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Split between (select all who should share this expense) <span class="required">*</span></label>
+                        <div class="checkbox-group" id="expense-split-between">
+                            <!-- Checkboxes will be dynamically inserted here -->
+                        </div>
+                        <small class="form-help">Required. You must be included. Select all group members who should share this expense.</small>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="secondary" onclick="closeAddExpenseModal()">Cancel</button>
+                        <button type="submit">Create Expense</button>
+                    </div>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(modalOverlay);
+        
+        // Close modal when clicking outside
+        modalOverlay.addEventListener('click', function(event) {
+            if (event.target === modalOverlay) {
+                closeAddExpenseModal();
+            }
+        });
+    }
+
+    // Populate checkboxes with group members (always refresh in case members changed)
+    const checkboxGroup = document.getElementById('expense-split-between');
+    if (checkboxGroup && currentGroup.members) {
+        checkboxGroup.innerHTML = currentGroup.members.map(member => {
+            const isCurrentUser = member.id === currentUser.id;
+            return `
+                <div class="checkbox-item">
+                    <input type="checkbox" id="split-${member.id}" value="${member.id}" 
+                           ${isCurrentUser ? 'checked disabled' : ''}>
+                    <label for="split-${member.id}" ${isCurrentUser ? 'style="color: #6c757d;"' : ''}>
+                        ${escapeHtml(member.name)} (${escapeHtml(member.email)})${isCurrentUser ? ' (payer)' : ''}
+                    </label>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // Set today's date as default (always set when opening modal)
+    const dateInput = document.getElementById('expense-date');
+    if (dateInput) {
+        const today = new Date().toISOString().split('T')[0];
+        dateInput.value = today;
+    }
+
+    modalOverlay.classList.add('active');
+    const descriptionInput = document.getElementById('expense-description');
+    if (descriptionInput) {
+        descriptionInput.focus();
+    }
+}
+
+function closeAddExpenseModal() {
+    const modalOverlay = document.getElementById('add-expense-modal');
+    if (modalOverlay) {
+        modalOverlay.classList.remove('active');
+        const form = document.getElementById('add-expense-form');
+        if (form) {
+            form.reset();
+        }
+        // Clear any validation errors
+        clearFormErrors('add-expense-form');
+    }
+}
+
+function submitAddExpense(event) {
+    event.preventDefault();
+    
+    if (!currentToken) {
+        showError('You must be logged in to create an expense');
+        return;
+    }
+
+    if (!currentGroup) {
+        showError('No group selected');
+        return;
+    }
+
+    if (!currentUser) {
+        showError('User information not available');
+        return;
+    }
+
+    const form = event.target;
+    const formData = new FormData(form);
+    const description = formData.get('description').trim();
+    const amount = parseFloat(formData.get('amount'));
+    const date = formData.get('date');
+
+    // Clear previous errors
+    clearFormErrors('add-expense-form');
+
+    // Validate description
+    if (!description || description.length === 0) {
+        showFormError('expense-description', 'Description is required');
+        return;
+    }
+    if (description.length > 200) {
+        showFormError('expense-description', 'Description must be at most 200 characters');
+        return;
+    }
+
+    // Validate amount
+    if (!amount || isNaN(amount)) {
+        showFormError('expense-amount', 'Amount is required');
+        return;
+    }
+    if (amount < 0.01) {
+        showFormError('expense-amount', 'Amount must be at least $0.01');
+        return;
+    }
+
+    // Validate date
+    if (!date) {
+        showFormError('expense-date', 'Date is required');
+        return;
+    }
+    // Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+        showFormError('expense-date', 'Date must be in YYYY-MM-DD format');
+        return;
+    }
+
+    // Get selected users for splitBetween
+    const checkboxes = document.querySelectorAll('#expense-split-between input[type="checkbox"]:checked');
+    const splitBetween = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+    // Validate splitBetween
+    if (splitBetween.length === 0) {
+        showError('You must select at least one person to split the expense with');
+        return;
+    }
+
+    // Validate current user is included (should always be true since checkbox is checked and disabled)
+    if (!splitBetween.includes(currentUser.id)) {
+        showError('You must be included in the expense split');
+        return;
+    }
+
+    // Validate all selected users are group members (client-side validation)
+    if (currentGroup.members) {
+        const memberIds = currentGroup.members.map(m => m.id);
+        const invalidUsers = splitBetween.filter(userId => !memberIds.includes(userId));
+        if (invalidUsers.length > 0) {
+            showError('All selected users must be members of this group');
+            return;
+        }
+    }
+
+    // Prepare request body
+    const requestBody = {
+        description: description,
+        amount: amount,
+        date: date,
+        splitBetween: splitBetween
+    };
+
+    // Disable form during submission
+    const submitButton = form.querySelector('button[type="submit"]');
+    const originalText = submitButton.textContent;
+    submitButton.disabled = true;
+    submitButton.textContent = 'Creating...';
+
+    fetch(`${API_BASE}/groups/${currentGroup.id}/expenses`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${currentToken}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+    })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Failed to create expense');
+                });
+            }
+            return response.json();
+        })
+        .then(expense => {
+            closeAddExpenseModal();
+            // Switch to Expenses tab
+            switchTab('expenses');
+            // Reload expenses data
+            fetchGroupExpenses(currentGroup.id);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError(error.message || 'Failed to create expense');
+        })
+        .finally(() => {
+            submitButton.disabled = false;
+            submitButton.textContent = originalText;
+        });
 }
 
 function showAddMemberModal() {
@@ -638,6 +898,160 @@ function switchTab(tabName) {
     if (tabContent) {
         tabContent.classList.add('active');
     }
+
+    // Fetch expenses when expenses tab is selected
+    if (tabName === 'expenses' && currentGroup) {
+        fetchGroupExpenses(currentGroup.id);
+    }
+}
+
+function fetchGroupExpenses(groupId) {
+    if (!currentToken) {
+        showError('You must be logged in to view expenses');
+        return;
+    }
+
+    if (!currentGroup) {
+        showError('No group selected');
+        return;
+    }
+
+    const expensesContainer = document.getElementById('expenses-container');
+    if (!expensesContainer) {
+        return;
+    }
+
+    // Show loading state
+    expensesContainer.innerHTML = '<p style="color: #6c757d;">Loading expenses...</p>';
+
+    fetch(`${API_BASE}/groups/${groupId}/expenses`, {
+        headers: {
+            'Authorization': `Bearer ${currentToken}`
+        }
+    })
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 401) {
+                    logout();
+                    throw new Error('Authentication failed');
+                }
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Failed to fetch expenses');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            renderExpenses(data.expenses || []);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError(error.message || 'Failed to fetch expenses');
+            expensesContainer.innerHTML = '<p style="color: #dc3545;">Failed to load expenses.</p>';
+        });
+}
+
+function renderExpenses(expenses) {
+    const expensesContainer = document.getElementById('expenses-container');
+    if (!expensesContainer) {
+        return;
+    }
+
+    if (!currentUser) {
+        expensesContainer.innerHTML = '<p style="color: #6c757d;">Unable to display expenses.</p>';
+        return;
+    }
+
+    const currentUserId = currentUser.id;
+    let totalUserShare = 0;
+
+    if (expenses.length === 0) {
+        expensesContainer.innerHTML = '<p style="color: #6c757d;">No expenses in this group yet.</p>';
+        return;
+    }
+
+    // Calculate total user share
+    expenses.forEach(expense => {
+        const isParticipant = expense.splitBetween.some(user => user.id === currentUserId);
+        if (isParticipant) {
+            totalUserShare += expense.perPersonAmount || 0;
+        }
+    });
+
+    // Format date helper
+    function formatDate(dateString) {
+        const date = new Date(dateString + 'T00:00:00');
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+    }
+
+    // Format currency helper
+    function formatCurrency(amount) {
+        return `$${amount.toFixed(2)}`;
+    }
+
+    // Build expenses table
+    const expensesHtml = `
+        <table style="margin-top: 20px;">
+            <thead>
+                <tr>
+                    <th>Expense</th>
+                    <th style="text-align: center;">People</th>
+                    <th style="text-align: right;">Total Amount</th>
+                    <th style="text-align: right;">Your Share</th>
+                    <th style="text-align: center;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${expenses.map(expense => {
+                    const isParticipant = expense.splitBetween.some(user => user.id === currentUserId);
+                    const isPayer = expense.paidBy.id === currentUserId;
+                    const userShare = isParticipant ? (expense.perPersonAmount || 0) : 0;
+                    
+                    return `
+                        <tr>
+                            <td>
+                                <div style="font-weight: 600; color: #333; margin-bottom: 5px;">${escapeHtml(expense.description)}</div>
+                                <div style="font-size: 0.9em; color: #6c757d;">Paid by ${escapeHtml(expense.paidBy.name)} on ${formatDate(expense.date)}</div>
+                            </td>
+                            <td style="text-align: center;">
+                                <div style="font-weight: 600; color: #495057;">${expense.splitBetween.length}</div>
+                            </td>
+                            <td style="text-align: right;">
+                                <div class="expense-amount" style="margin: 0;">${formatCurrency(expense.amount)}</div>
+                            </td>
+                            <td style="text-align: right;">
+                                ${isParticipant ? 
+                                    `<div class="expense-amount" style="margin: 0; color: #28a745; font-weight: 600;">${formatCurrency(userShare)}</div>` :
+                                    '<div style="color: #6c757d; font-size: 0.9em;">Not included</div>'
+                                }
+                            </td>
+                            <td style="text-align: right;">
+                                ${isPayer ? 
+                                    '<div style="display: flex; gap: 10px; justify-content: flex-end;"><button class="small secondary">Edit</button><button class="small danger">Delete</button></div>' :
+                                    ''
+                                }
+                            </td>
+                        </tr>
+                    `;
+                }).join('')}
+                <tr style="background-color: #f8f9fa; font-weight: 600;">
+                    <td style="border-top: 2px solid #dee2e6; padding-top: 15px;">
+                        <div>Your total share of expenses</div>
+                        <div style="font-size: 0.9em; font-weight: normal; color: #6c757d; margin-top: 5px;">Sum of your share from all expenses</div>
+                    </td>
+                    <td style="border-top: 2px solid #dee2e6; padding-top: 15px;"></td>
+                    <td style="text-align: right; border-top: 2px solid #dee2e6; padding-top: 15px;"></td>
+                    <td style="text-align: right; border-top: 2px solid #dee2e6; padding-top: 15px;">
+                        <div class="expense-amount" style="margin: 0; font-size: 1.2em; color: #28a745;">${formatCurrency(totalUserShare)}</div>
+                    </td>
+                    <td style="border-top: 2px solid #dee2e6; padding-top: 15px;"></td>
+                </tr>
+            </tbody>
+        </table>
+    `;
+
+    expensesContainer.innerHTML = expensesHtml;
 }
 
 function escapeHtml(text) {
