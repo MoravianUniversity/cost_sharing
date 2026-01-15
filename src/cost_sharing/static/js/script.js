@@ -3,6 +3,7 @@ const API_BASE = '';
 
 let currentToken = null;
 let currentUser = null;
+let currentGroup = null;
 
 function init() {
     // Check for token in localStorage
@@ -164,7 +165,7 @@ function renderGroupsList(groups) {
     groupsListContainer.innerHTML = groups.map(group => {
         const memberNames = (group.members || []).map(member => escapeHtml(member.name)).join(', ');
         return `
-        <div class="group-card">
+        <div class="group-card" onclick="viewGroupDetails(${group.id})" style="cursor: pointer;">
             <div class="group-card-header">
                 <div>
                     <h3>${escapeHtml(group.name)}</h3>
@@ -172,7 +173,7 @@ function renderGroupsList(groups) {
                     <div class="group-meta">Members: ${memberNames || 'None'}</div>
                 </div>
                 <div class="group-card-actions">
-                    <button class="danger small" onclick="handleDeleteGroup(${group.id})">Delete</button>
+                    <button class="danger small" onclick="event.stopPropagation(); handleDeleteGroup(${group.id})">Delete</button>
                 </div>
             </div>
         </div>
@@ -312,6 +313,129 @@ function handleDeleteGroup(groupId) {
     alert('Not implemented');
 }
 
+function viewGroupDetails(groupId) {
+    fetchGroupDetails(groupId);
+}
+
+function fetchGroupDetails(groupId) {
+    if (!currentToken) {
+        showError('You must be logged in to view group details');
+        return;
+    }
+
+    fetch(`${API_BASE}/groups/${groupId}`, {
+        headers: {
+            'Authorization': `Bearer ${currentToken}`
+        }
+    })
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 401) {
+                    logout();
+                    throw new Error('Authentication failed');
+                }
+                if (response.status === 403) {
+                    throw new Error('You do not have access to this group');
+                }
+                if (response.status === 404) {
+                    throw new Error('Group not found');
+                }
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Failed to fetch group details');
+                });
+            }
+            return response.json();
+        })
+        .then(group => {
+            currentGroup = group;
+            renderGroupDetails(group);
+            showGroupDetailsView();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError(error.message || 'Failed to fetch group details');
+        });
+}
+
+function renderGroupDetails(group) {
+    // Update group header
+    document.getElementById('group-details-name').textContent = group.name || '';
+    const descriptionEl = document.getElementById('group-details-description');
+    if (group.description) {
+        descriptionEl.textContent = group.description;
+        descriptionEl.style.display = 'block';
+    } else {
+        descriptionEl.textContent = '';
+        descriptionEl.style.display = 'none';
+    }
+
+    // Render members
+    renderGroupMembers(group.members || [], group.createdBy || null);
+}
+
+function renderGroupMembers(members, creator) {
+    const membersContainer = document.getElementById('group-details-members');
+    if (!membersContainer) {
+        return;
+    }
+
+    if (members.length === 0) {
+        membersContainer.innerHTML = '<p>No members in this group.</p>';
+        return;
+    }
+
+    const creatorId = creator ? creator.id : null;
+
+    membersContainer.innerHTML = members.map(member => {
+        const isCreator = creatorId && member.id === creatorId;
+        const creatorBadge = isCreator ? '<span class="member-badge">Creator</span>' : '';
+        
+        return `
+            <div class="member-item">
+                <div class="member-info">
+                    <div class="member-name">${escapeHtml(member.name)} ${creatorBadge}</div>
+                    <div class="member-email">${escapeHtml(member.email)}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function showGroupDetailsView() {
+    document.getElementById('groups-list-view').classList.add('hidden');
+    document.getElementById('group-details-view').classList.remove('hidden');
+}
+
+function showGroupsList() {
+    document.getElementById('group-details-view').classList.add('hidden');
+    document.getElementById('groups-list-view').classList.remove('hidden');
+    currentGroup = null;
+}
+
+function switchTab(tabName) {
+    // Remove active class from all tabs and tab contents
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+
+    // Add active class to selected tab
+    const tabButton = Array.from(document.querySelectorAll('.tab')).find(btn => {
+        return btn.textContent.trim().toLowerCase() === tabName.toLowerCase();
+    });
+    if (tabButton) {
+        tabButton.classList.add('active');
+    }
+
+    // Show selected tab content
+    const tabContent = document.getElementById(`tab-${tabName}`);
+    if (tabContent) {
+        tabContent.classList.add('active');
+    }
+}
+
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
@@ -322,6 +446,8 @@ function showLoggedInState() {
     document.getElementById('navigation').classList.remove('hidden');
     document.getElementById('login-section').classList.add('hidden');
     document.getElementById('groups-section').classList.remove('hidden');
+    // Ensure we show groups list view by default
+    showGroupsList();
 }
 
 function showLoggedOutState() {
