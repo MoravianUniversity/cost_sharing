@@ -682,3 +682,214 @@ def test_get_group_null_description(api_client, oauth_handler):
     data = assert_json_response(response, expected_status=200)
     assert_group_json_is(data, "quick_split")
     assert data['description'] == ""
+
+
+# ============================================================================
+# POST /groups/{groupId}/members Tests
+# ============================================================================
+
+def test_add_group_member_success_existing_user(api_client, oauth_handler):
+    """Test successful addition of existing user to group."""
+    # User 1 (Alice) is a member of group 1 (weekend_trip)
+    # User 3 (Charlie) exists but is not in group 1
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/1/members',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'email': 'charlie@school.edu',
+            'name': 'Charlie'
+        }
+    )
+
+    data = assert_json_response(response, expected_status=201)
+    # Verify the added user is in the members list
+    member_emails = [member['email'] for member in data['members']]
+    assert 'charlie@school.edu' in member_emails
+    # Verify it's a Group object
+    assert 'id' in data
+    assert 'name' in data
+    assert 'members' in data
+
+
+def test_add_group_member_success_new_user(api_client, oauth_handler):
+    """Test successful addition of new user (creates user account)."""
+    # User 1 (Alice) is a member of group 1 (weekend_trip)
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/1/members',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'email': 'newuser@example.com',
+            'name': 'New User'
+        }
+    )
+
+    data = assert_json_response(response, expected_status=201)
+    # Verify the added user is in the members list
+    member_emails = [member['email'] for member in data['members']]
+    assert 'newuser@example.com' in member_emails
+
+
+def test_add_group_member_missing_header(api_client):
+    """Test POST /groups/{groupId}/members without Authorization header."""
+    response = api_client.post(
+        '/groups/1/members',
+        json={'email': 'test@example.com', 'name': 'Test User'}
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_add_group_member_invalid_token(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/members with invalid token."""
+    oauth_handler.validate_token_raises(TokenInvalidError("Invalid token"))
+
+    response = api_client.post(
+        '/groups/1/members',
+        headers={
+            'Authorization': 'Bearer invalid-token',
+            'Content-Type': 'application/json'
+        },
+        json={'email': 'test@example.com', 'name': 'Test User'}
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_add_group_member_missing_email(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/members with missing email."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/1/members',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        json={'name': 'Test User'}
+    )
+
+    assert_validation_error_response(response, "email is required")
+
+
+def test_add_group_member_missing_name(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/members with missing name."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/1/members',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        json={'email': 'test@example.com'}
+    )
+
+    assert_validation_error_response(response, "name is required")
+
+
+def test_add_group_member_invalid_email_format(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/members with invalid email format."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/1/members',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'email': 'not-an-email',
+            'name': 'Test User'
+        }
+    )
+
+    assert_validation_error_response(response, "email must be a valid email address")
+
+
+def test_add_group_member_invalid_json(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/members with invalid JSON."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/1/members',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        data='invalid json'
+    )
+
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['error'] == "Validation failed"
+    assert 'message' in data
+
+
+def test_add_group_member_group_not_found(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/members when group doesn't exist."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/999/members',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'email': 'test@example.com',
+            'name': 'Test User'
+        }
+    )
+
+    assert_error_response(response, 404, "Resource not found", "Group not found")
+
+
+def test_add_group_member_forbidden(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/members when user is not a member."""
+    # User 2 (Bob) is NOT a member of group 2 (roommates)
+    oauth_handler.validate_token_returns(2)
+
+    response = api_client.post(
+        '/groups/2/members',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'email': 'test@example.com',
+            'name': 'Test User'
+        }
+    )
+
+    assert_error_response(response, 403, "Forbidden", "Access denied")
+
+
+def test_add_group_member_conflict(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/members when user is already a member."""
+    # User 1 (Alice) is a member of group 2 (roommates)
+    # User 1 (Alice) is already in group 2
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/2/members',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'email': 'alice@school.edu',
+            'name': 'Alice'
+        }
+    )
+
+    assert_error_response(response, 409, "Conflict", "User is already a member of this group")

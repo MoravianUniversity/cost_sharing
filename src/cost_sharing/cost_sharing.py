@@ -3,7 +3,8 @@
 from cost_sharing.exceptions import (
     UserNotFoundError,
     GroupNotFoundError,
-    ForbiddenError
+    ForbiddenError,
+    ConflictError
 )
 
 
@@ -109,3 +110,38 @@ class CostSharing:
             raise ForbiddenError("You do not have access to this group")
 
         return group
+
+    def add_group_member(self, group_id, caller_user_id, email, name):
+        """
+        Add a member to a group by email. Creates user account if user doesn't exist.
+
+        Args:
+            group_id: Group ID to add member to
+            caller_user_id: User ID of the authenticated caller (must be a member)
+            email: Email address of the user to add
+            name: Name of the user to add
+
+        Returns:
+            Group object with updated members list
+
+        Raises:
+            GroupNotFoundError: If group doesn't exist
+            ForbiddenError: If caller is not a member of the group
+            ConflictError: If user is already a member of the group
+        """
+        # Verify caller is a member (raises GroupNotFoundError or ForbiddenError if invalid)
+        group = self.get_group_by_id(group_id, caller_user_id)
+
+        # Get or create the user
+        user = self.get_or_create_user(email, name)
+
+        # Check if user is already a member
+        user_ids = [member.id for member in group.members]
+        if user.id in user_ids:
+            raise ConflictError("User is already a member of this group")
+
+        # Add member to group
+        self._storage.add_group_member(group_id, user.id)
+
+        # Return updated group
+        return self._storage.get_group_by_id(group_id)
