@@ -8,7 +8,7 @@ from cost_sharing.models import (
 from cost_sharing.exceptions import StorageException
 
 
-class DatabaseCostStorage:
+class DatabaseCostStorage: # pylint: disable=R0904
     """
     Database storage implementation using sqlite3.
 
@@ -503,3 +503,46 @@ class DatabaseCostStorage:
             raise StorageException(
                 f"Database error retrieving expense by ID: {e}"
             ) from e
+
+    def update_expense(self, expense_id, expense):
+        """
+        Update an existing expense with new description, amount, date, and participants.
+
+        Args:
+            expense_id: Expense ID to update
+            expense: ExpenseRequest with description, amount, date,
+                and participant_user_ids (paid_by_user_id is ignored)
+
+        Returns:
+            Expense object with paidBy and splitBetween populated
+
+        Raises:
+            StorageException: If a database error occurs
+        """
+        try:
+            # Update expense fields (paid_by_user_id is NOT updated)
+            self._conn.execute(
+                ('UPDATE expenses SET description = ?, amount = ?, expense_date = ? '
+                 'WHERE id = ?'),
+                (expense.description, expense.amount, expense.date, expense_id)
+            )
+
+            # Delete old participants
+            self._conn.execute(
+                'DELETE FROM expense_participants WHERE expense_id = ?',
+                (expense_id,)
+            )
+
+            # Add new participants
+            for user_id in expense.participant_user_ids:
+                self._add_expense_participant(expense_id, user_id)
+
+            self._conn.commit()
+
+            # Get updated expense with payer and participants
+            updated_expense = self.get_expense_by_id(expense_id)
+
+            return updated_expense
+        except sqlite3.Error as e:
+            self._conn.rollback()
+            raise StorageException(f"Database error updating expense: {e}") from e

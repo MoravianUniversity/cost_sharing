@@ -1394,7 +1394,7 @@ def test_create_expense_user_not_in_split_between(api_client, oauth_handler):
     )
 
     assert_validation_error_response(response,
-        'splitBetween must include the authenticated user\'s ID')
+        "splitBetween must include the authenticated user's ID (the payer)")
 
 
 def test_create_expense_user_not_in_group(api_client, oauth_handler):
@@ -1649,3 +1649,470 @@ def test_get_expense_response_structure(api_client, oauth_handler):
         assert 'id' in participant
         assert 'email' in participant
         assert 'name' in participant
+
+
+# ============================================================================
+# PUT /groups/{groupId}/expenses/{expenseId} Tests
+# ============================================================================
+
+def test_update_expense_success(api_client, oauth_handler):
+    """Test successful expense update - User 1 (Alice) updating expense 2."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Updated utilities bill',
+            'amount': 125.00,
+            'date': '2025-01-16',
+            'splitBetween': [3, 1]
+        }
+    )
+
+    data = assert_json_response(response, expected_status=200)
+    assert data['id'] == 2
+    assert data['description'] == 'Updated utilities bill'
+    assert data['amount'] == 125.00
+    assert data['date'] == '2025-01-16'
+    assert data['paidBy']['id'] == 1
+    assert len(data['splitBetween']) == 2
+    assert data['perPersonAmount'] == 62.50
+
+
+def test_update_expense_missing_header(api_client):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} without Authorization header."""
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_update_expense_invalid_token(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} with invalid token."""
+    oauth_handler.validate_token_raises(TokenInvalidError("Invalid token"))
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer invalid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_update_expense_missing_description(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} with missing description."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_validation_error_response(response, 'description is required')
+
+
+def test_update_expense_empty_description(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} with empty description."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': '',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_validation_error_response(response, 'description must be at least 1 character')
+
+
+def test_update_expense_description_too_long(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} with description too long."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'x' * 201,
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_validation_error_response(response,
+        'description must be at most 200 characters')
+
+
+def test_update_expense_missing_amount(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} with missing amount."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_validation_error_response(response, 'amount is required')
+
+
+def test_update_expense_invalid_amount_too_small(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} with amount too small."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 0.00,
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_validation_error_response(response, 'amount must be at least 0.01')
+
+
+def test_update_expense_missing_date(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} with missing date."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'splitBetween': [1]
+        }
+    )
+
+    assert_validation_error_response(response, 'date is required')
+
+
+def test_update_expense_invalid_date_format(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} with invalid date format."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '01-15-2025',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_validation_error_response(response,
+        'date must be in ISO 8601 format (YYYY-MM-DD)')
+
+
+def test_update_expense_missing_split_between(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} with missing splitBetween."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15'
+        }
+    )
+
+    assert_validation_error_response(response, 'splitBetween is required')
+
+
+def test_update_expense_empty_split_between(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} with empty splitBetween."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': []
+        }
+    )
+
+    assert_validation_error_response(response,
+        'splitBetween must contain at least one user ID')
+
+
+def test_update_expense_user_not_in_split_between(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} when user not in splitBetween."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [3]  # Alice (user 1) not included
+        }
+    )
+
+    assert_validation_error_response(response,
+        "splitBetween must include the authenticated user's ID (the payer)")
+
+
+def test_update_expense_user_not_in_group(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} when participant not a group member."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [1, 2]  # Bob (user 2) is not a member of group 2
+        }
+    )
+
+    assert_validation_error_response(response,
+        'All users in splitBetween must be members of the group')
+
+
+def test_update_expense_group_not_found(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} when group doesn't exist."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/999/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_error_response(response, 404, "Resource not found", "Group not found")
+
+
+def test_update_expense_not_found(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} when expense doesn't exist."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/999',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_error_response(response, 404, "Resource not found", "Expense not found")
+
+
+def test_update_expense_forbidden_not_payer(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} when user is not the payer."""
+    # User 1 (Alice) tries to update expense 1 (grocery_shopping)
+    # which was paid by user 3 (Charlie)
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/1',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Updated expense',
+            'amount': 90.00,
+            'date': '2025-01-11',
+            'splitBetween': [3, 1]
+        }
+    )
+
+    assert_error_response(response, 403, "Forbidden",
+        "Only the person who paid for this expense can modify it")
+
+
+def test_update_expense_forbidden_not_member(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} when user is not a member."""
+    # User 2 (Bob) is NOT a member of group 2
+    oauth_handler.validate_token_returns(2)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [2]
+        }
+    )
+
+    assert_error_response(response, 403, "Forbidden", "Access denied")
+
+
+def test_update_expense_response_structure(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} response has correct structure."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Updated expense',
+            'amount': 125.00,
+            'date': '2025-01-16',
+            'splitBetween': [3, 1]
+        }
+    )
+
+    data = assert_json_response(response, expected_status=200)
+    assert 'id' in data
+    assert 'groupId' in data
+    assert 'description' in data
+    assert 'amount' in data
+    assert 'date' in data
+    assert 'paidBy' in data
+    assert 'splitBetween' in data
+    assert 'perPersonAmount' in data
+
+    # Verify paidBy structure
+    assert 'id' in data['paidBy']
+    assert 'email' in data['paidBy']
+    assert 'name' in data['paidBy']
+
+    # Verify splitBetween structure
+    assert isinstance(data['splitBetween'], list)
+    for participant in data['splitBetween']:
+        assert 'id' in participant
+        assert 'email' in participant
+        assert 'name' in participant
+
+
+def test_update_expense_calculates_per_person_amount(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} calculates perPersonAmount correctly."""
+    oauth_handler.validate_token_returns(1)
+
+    # Update expense 4 (internet_bill) from 3 participants to 2
+    response = api_client.put(
+        '/groups/2/expenses/4',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Internet bill',
+            'amount': 100.00,
+            'date': '2025-01-25',
+            'splitBetween': [1, 4]  # 2 participants = $50.00 each
+        }
+    )
+
+    data = assert_json_response(response, expected_status=200)
+    assert data['perPersonAmount'] == 50.00
+
+
+def test_update_expense_invalid_json(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} with invalid JSON."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        data='invalid json'
+    )
+
+    assert_validation_error_response(response, 'Invalid JSON')
+
+
+def test_update_expense_invalid_amount_not_number(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} with amount that is not a number."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 'not a number',
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_validation_error_response(response, 'amount must be a number')
+
+
+def test_update_expense_split_between_not_array(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} when splitBetween is not an array."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': 'not an array'
+        }
+    )
+
+    assert_validation_error_response(response, 'splitBetween must be an array')
+
+
+def test_update_expense_split_between_invalid_user_id_type(api_client, oauth_handler):
+    """Test PUT /groups/{groupId}/expenses/{expenseId} when splitBetween contains non-integer."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.put(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [1, 'not an integer']
+        }
+    )
+
+    assert_validation_error_response(
+        response, 'splitBetween must contain only integers'
+    )

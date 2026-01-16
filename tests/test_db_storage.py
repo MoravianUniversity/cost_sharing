@@ -13,18 +13,21 @@ assertions (e.g., assert_user_matches, assert_groups_are).
 import sqlite3
 from unittest.mock import MagicMock
 import pytest
-from helpers import assert_user_matches, assert_groups_are, \
-    assert_user_is, assert_group_matches, assert_group_is, assert_group_has_members, \
-    assert_expenses_are, assert_expense_participants, assert_expense_matches_retrieved
+from helpers import (
+    assert_user_matches, assert_groups_are,
+    assert_user_is, assert_group_matches, assert_group_is, assert_group_has_members,
+    assert_expenses_are, assert_expense_participants,
+    assert_expense_matches_retrieved,
+    TEST_USER_REQUESTS, TEST_EXPENSE_REQUESTS
+)
 from cost_sharing.db_storage import DatabaseCostStorage
-from cost_sharing.models import UserRequest, GroupRequest, ExpenseRequest
+from cost_sharing.models import GroupRequest
 from cost_sharing.exceptions import StorageException
 
 
 def test_get_user_by_email_returns_user_when_exists(empty_db_storage):
     """Test get_user_by_email retrieves user and all fields are correct"""
-    user_request = UserRequest(email="test@example.com", name="Test User")
-    created_user = empty_db_storage.create_user(user_request)
+    created_user = empty_db_storage.create_user(TEST_USER_REQUESTS["test_user"])
     retrieved_user = empty_db_storage.get_user_by_email("test@example.com")
     assert_user_matches(retrieved_user, created_user.id, "test@example.com", "Test User")
 
@@ -37,36 +40,29 @@ def test_get_user_by_email_returns_none_when_not_exists(empty_db_storage):
 
 def test_create_user_returns_user_with_id_one_for_first_user(empty_db_storage):
     """Test create_user returns user with ID 1 for first user and all fields are correct"""
-    user_request = UserRequest(email="test@example.com", name="Test User")
-    user = empty_db_storage.create_user(user_request)
+    user = empty_db_storage.create_user(TEST_USER_REQUESTS["test_user"])
     assert_user_matches(user, 1, "test@example.com", "Test User")
 
 
 def test_create_user_auto_increments_after_sample_data(db_storage_with_sample_data):
     """Test create_user auto-increments ID after sample data and all fields are correct"""
-    user_request = UserRequest(email="newuser@example.com", name="New User")
-    user = db_storage_with_sample_data.create_user(user_request)
+    user = db_storage_with_sample_data.create_user(TEST_USER_REQUESTS["new_user"])
     assert_user_matches(user, 12, "newuser@example.com", "New User")
 
 
 def test_create_user_raises_storage_exception_for_duplicate_email(empty_db_storage):
     """Test create_user raises StorageException for duplicate email (IntegrityError wrapped)"""
-    user_request = UserRequest(email="test@example.com", name="Test User")
-    empty_db_storage.create_user(user_request)
+    empty_db_storage.create_user(TEST_USER_REQUESTS["test_user"])
     with pytest.raises(StorageException) as exc_info:
-        user_request = UserRequest(email="test@example.com", name="Another User")
-        empty_db_storage.create_user(user_request)
+        empty_db_storage.create_user(TEST_USER_REQUESTS["another_user"])
     assert "Database error creating user" in str(exc_info.value)
 
 
 def test_create_user_auto_increments_ids_for_multiple_users(empty_db_storage):
     """Test create_user auto-increments IDs for multiple users"""
-    user_request1 = UserRequest(email="user1@example.com", name="User One")
-    user1 = empty_db_storage.create_user(user_request1)
-    user_request2 = UserRequest(email="user2@example.com", name="User Two")
-    user2 = empty_db_storage.create_user(user_request2)
-    user_request3 = UserRequest(email="user3@example.com", name="User Three")
-    user3 = empty_db_storage.create_user(user_request3)
+    user1 = empty_db_storage.create_user(TEST_USER_REQUESTS["user1"])
+    user2 = empty_db_storage.create_user(TEST_USER_REQUESTS["user2"])
+    user3 = empty_db_storage.create_user(TEST_USER_REQUESTS["user3"])
 
     assert user1.id == 1
     assert user2.id == 2
@@ -75,8 +71,7 @@ def test_create_user_auto_increments_ids_for_multiple_users(empty_db_storage):
 
 def test_get_user_by_id_returns_user_when_exists(empty_db_storage):
     """Test get_user_by_id retrieves user and all fields are correct"""
-    user_request = UserRequest(email="test@example.com", name="Test User")
-    created_user = empty_db_storage.create_user(user_request)
+    created_user = empty_db_storage.create_user(TEST_USER_REQUESTS["test_user"])
     retrieved_user = empty_db_storage.get_user_by_id(created_user.id)
     assert_user_matches(retrieved_user, created_user.id, "test@example.com", "Test User")
 
@@ -117,8 +112,7 @@ def test_create_user_raises_storage_exception_on_database_error(error_storage):
     storage = error_storage
 
     with pytest.raises(StorageException):
-        user_request = UserRequest(email="test@example.com", name="Test User")
-        storage.create_user(user_request)
+        storage.create_user(TEST_USER_REQUESTS["test_user"])
 
 
 def test_get_user_by_id_raises_storage_exception_on_database_error(error_storage):
@@ -165,8 +159,7 @@ def test_get_user_groups_raises_storage_exception_on_database_error(error_storag
 
 def test_create_group_returns_group_with_id_one_for_first_group(empty_db_storage):
     """Test create_group returns group with ID 1 for first group"""
-    user_request = UserRequest(email="test@example.com", name="Test User")
-    user = empty_db_storage.create_user(user_request)
+    user = empty_db_storage.create_user(TEST_USER_REQUESTS["test_user"])
     group_request = GroupRequest(
         name="Test Group",
         description="Test description",
@@ -183,7 +176,8 @@ def test_create_group_auto_increments_after_sample_data(db_storage_with_sample_d
     group_request = GroupRequest(
         name="New Group",
         description="New description",
-        created_by_user_id=user.id)
+        created_by_user_id=user.id
+    )
     group = db_storage_with_sample_data.create_group(group_request)
     assert_group_matches(group, 7, "New Group", "New description", user, expected_member_count=1)
     assert_user_is(group.members[0], "alice")
@@ -191,9 +185,12 @@ def test_create_group_auto_increments_after_sample_data(db_storage_with_sample_d
 
 def test_create_group_without_description(empty_db_storage):
     """Test create_group works without description"""
-    user_request = UserRequest(email="test@example.com", name="Test User")
-    user = empty_db_storage.create_user(user_request)
-    group_request = GroupRequest(name="Test Group", description=None, created_by_user_id=user.id)
+    user = empty_db_storage.create_user(TEST_USER_REQUESTS["test_user"])
+    group_request = GroupRequest(
+        name="Test Group",
+        description=None,
+        created_by_user_id=user.id
+    )
     group = empty_db_storage.create_group(group_request)
     assert_group_matches(group, 1, "Test Group", "", user, expected_member_count=1)
     assert_user_matches(group.members[0], user.id, "test@example.com", "Test User")
@@ -201,9 +198,12 @@ def test_create_group_without_description(empty_db_storage):
 
 def test_create_group_adds_creator_as_member(empty_db_storage):
     """Test create_group adds the creator as a member"""
-    user_request = UserRequest(email="test@example.com", name="Test User")
-    user = empty_db_storage.create_user(user_request)
-    group_request = GroupRequest(name="Test Group", description=None, created_by_user_id=user.id)
+    user = empty_db_storage.create_user(TEST_USER_REQUESTS["test_user"])
+    group_request = GroupRequest(
+        name="Test Group",
+        description=None,
+        created_by_user_id=user.id
+    )
     group = empty_db_storage.create_group(group_request)
 
     # Verify user is in the group
@@ -219,7 +219,11 @@ def test_create_group_raises_storage_exception_when_creator_not_found(empty_db_s
 
     # get_user_by_id will return None for non-existent user
     with pytest.raises(StorageException) as exc_info:
-        group_request = GroupRequest(name="Test Group", description=None, created_by_user_id=999)
+        group_request = GroupRequest(
+            name="Test Group",
+            description=None,
+            created_by_user_id=999
+        )
         storage.create_group(group_request)
     assert "User with ID 999 not found" in str(exc_info.value)
 
@@ -236,7 +240,11 @@ def test_create_group_raises_storage_exception_on_database_error(error_storage):
     "email":"test@example.com", "name":"Test User"})
 
     with pytest.raises(StorageException) as exc_info:
-        group_request = GroupRequest(name="Test Group", description=None, created_by_user_id=1)
+        group_request = GroupRequest(
+            name="Test Group",
+            description=None,
+            created_by_user_id=1
+        )
         storage.create_group(group_request)
     assert "Database error creating group" in str(exc_info.value)
 
@@ -460,14 +468,7 @@ def test_create_expense_adds_expense_to_group_with_no_expenses(db_storage_with_s
     storage = db_storage_with_sample_data
     # Group 1 (weekend_trip) has no expenses, members are [1, 2] (Alice, Bob)
 
-    expense_request = ExpenseRequest(
-        group_id=1,
-        description="Gas for trip",
-        amount=50.00,
-        date="2025-03-01",
-        paid_by_user_id=1,
-        participant_user_ids=[1, 2]
-    )
+    expense_request = TEST_EXPENSE_REQUESTS["gas_for_trip"]
     expense = storage.create_expense(expense_request)
 
     # Verify expense was added to database by retrieving it
@@ -481,14 +482,7 @@ def test_create_expense_adds_expense_to_group_with_existing_expenses(db_storage_
     storage = db_storage_with_sample_data
     # Group 2 (roommates) has expenses 1-4, members are [3, 1, 4] (Charlie, Alice, David)
 
-    expense_request = ExpenseRequest(
-        group_id=2,
-        description="New expense",
-        amount=25.50,
-        date="2025-02-01",
-        paid_by_user_id=3,
-        participant_user_ids=[3, 1]
-    )
+    expense_request = TEST_EXPENSE_REQUESTS["new_expense_group2"]
     expense = storage.create_expense(expense_request)
 
     # Verify expense was added to database - group should now have 5 expenses
@@ -502,14 +496,7 @@ def test_create_expense_with_multiple_participants(db_storage_with_sample_data):
     storage = db_storage_with_sample_data
     # Group 4 (study_group) has members [8, 9, 10, 11, 2] (Helen, Iris, Jack, Kate, Bob)
 
-    expense_request = ExpenseRequest(
-        group_id=4,
-        description="Study materials",
-        amount=75.00,
-        date="2025-03-10",
-        paid_by_user_id=8,
-        participant_user_ids=[8, 9, 10, 11]
-    )
+    expense_request = TEST_EXPENSE_REQUESTS["study_materials"]
     expense = storage.create_expense(expense_request)
 
     # Verify expense was added to database
@@ -522,14 +509,7 @@ def test_create_expense_with_single_participant(db_storage_with_sample_data):
     storage = db_storage_with_sample_data
     # Group 3 (project_team) has members [5, 6] (Eve, Frank)
 
-    expense_request = ExpenseRequest(
-        group_id=3,
-        description="Office supplies",
-        amount=30.25,
-        date="2025-03-05",
-        paid_by_user_id=5,
-        participant_user_ids=[5]
-    )
+    expense_request = TEST_EXPENSE_REQUESTS["office_supplies"]
     expense = storage.create_expense(expense_request)
 
     # Verify expense was added to database
@@ -544,14 +524,7 @@ def test_create_expense_raises_storage_exception_when_payer_not_found(
 
     # Database foreign key constraint should catch this
     with pytest.raises(StorageException) as exc_info:
-        expense_request = ExpenseRequest(
-            group_id=1,
-            description="Test expense",
-            amount=50.00,
-            date="2025-01-15",
-            paid_by_user_id=999,
-            participant_user_ids=[999]
-        )
+        expense_request = TEST_EXPENSE_REQUESTS["test_expense_invalid_payer"]
         storage.create_expense(expense_request)
     assert "Database error creating expense" in str(exc_info.value)
 
@@ -566,14 +539,7 @@ def test_create_expense_raises_storage_exception_on_database_error(error_storage
     )
 
     with pytest.raises(StorageException) as exc_info:
-        expense_request = ExpenseRequest(
-            group_id=1,
-            description="Test expense",
-            amount=50.00,
-            date="2025-01-15",
-            paid_by_user_id=1,
-            participant_user_ids=[1]
-        )
+        expense_request = TEST_EXPENSE_REQUESTS["test_failure"]
         storage.create_expense(expense_request)
     assert "Database error creating expense" in str(exc_info.value)
 
@@ -607,3 +573,64 @@ def test_get_expense_by_id_raises_storage_exception_on_database_error(error_stor
     with pytest.raises(StorageException,
                       match="Database error retrieving expense by ID"):
         error_storage.get_expense_by_id(1)
+
+
+# ============================================================================
+# update_expense Tests
+# ============================================================================
+
+def test_update_expense_updates_fields_and_participants(db_storage_with_sample_data):
+    """Test update_expense updates description, amount, date, and participants"""
+    storage = db_storage_with_sample_data
+
+    # Update expense 1 (grocery_shopping) with new values
+    expense_request = TEST_EXPENSE_REQUESTS["updated_grocery_shopping"]
+
+    updated_expense = storage.update_expense(1, expense_request)
+
+    # Verify the update was persisted by retrieving expenses
+    expenses = storage.get_group_expenses(2)
+    assert_expense_matches_retrieved(updated_expense, expenses)
+
+
+def test_update_expense_removes_participants(db_storage_with_sample_data):
+    """Test update_expense removes participants when new list is smaller"""
+    storage = db_storage_with_sample_data
+
+    # Expense 4 (internet_bill) originally has 3 participants [3, 1, 4]
+    # Update to only have 2 participants [3, 1]
+    expense_request = TEST_EXPENSE_REQUESTS["internet_bill_2_participants"]
+
+    updated_expense = storage.update_expense(4, expense_request)
+
+    # Verify the update was persisted by retrieving expenses
+    expenses = storage.get_group_expenses(2)
+    assert_expense_matches_retrieved(updated_expense, expenses)
+
+
+def test_update_expense_keeps_payer_unchanged(db_storage_with_sample_data):
+    """Test update_expense does not change the payer"""
+    storage = db_storage_with_sample_data
+
+    # Expense 2 (utilities_bill) was paid by Alice (user 1)
+    # Try to update with different paid_by_user_id (should be ignored)
+    expense_request = TEST_EXPENSE_REQUESTS["updated_utilities_bill_diff_payer"]
+
+    updated_expense = storage.update_expense(2, expense_request)
+
+    # Verify the update was persisted by retrieving expenses
+    expenses = storage.get_group_expenses(2)
+    assert_expense_matches_retrieved(updated_expense, expenses)
+    # Payer should still be Alice (user 1)
+    assert updated_expense.paid_by.id == 1
+    assert_user_is(updated_expense.paid_by, "alice")
+
+
+def test_update_expense_raises_storage_exception_on_database_error(error_storage):
+    """Test update_expense raises StorageException on database error"""
+
+    expense_request = TEST_EXPENSE_REQUESTS["test_expense_group1"]
+
+    with pytest.raises(StorageException,
+                      match="Database error updating expense"):
+        error_storage.update_expense(1, expense_request)

@@ -17,7 +17,7 @@ Usage in tests:
         assert_user_is, assert_groups_are, assert_expenses_are,
         assert_expense_participants, assert_group_members,
         assert_user_json, assert_groups_json_response,
-        assert_error_response, create_test_user
+        assert_error_response
     )
     assert_user_is(user, "alice")
     assert_groups_are(groups, ["weekend_trip", "roommates"])
@@ -27,7 +27,7 @@ Usage in tests:
     data = assert_groups_json_response(response, expected_status=200)
 """
 
-from cost_sharing.models import User
+from cost_sharing.models import UserRequest, ExpenseRequest
 
 # Sample data constants matching sample-data.sql
 # These serve as the single source of truth for expected values in tests
@@ -642,19 +642,282 @@ def assert_validation_error_response(response, expected_message):
 
 
 # ============================================================================
-# Test Data Factory Functions
+# Test Request Objects (Constants)
+# ============================================================================
+# These constants correspond to the sample data defined above (SAMPLE_USERS,
+# SAMPLE_GROUPS, SAMPLE_EXPENSES, SAMPLE_EXPENSE_PARTICIPANTS, etc.)
+# Refer to those constants to understand the relationships and test scenarios
+# covered by these request objects.
 # ============================================================================
 
-def create_test_user(user_id=1, email="test@example.com", name="Test User"):
-    """
-    Helper to create User object for testing.
+# UserRequest objects matching sample data users
+# Keys match SAMPLE_USERS dictionary for consistency
+SAMPLE_USER_REQUESTS = {
+    "alice": UserRequest(email="alice@school.edu", name="Alice"),
+    "bob": UserRequest(email="bob@school.edu", name="Bob"),
+    "charlie": UserRequest(email="charlie@school.edu", name="Charlie"),
+    "david": UserRequest(email="david@school.edu", name="David"),
+    "eve": UserRequest(email="eve@school.edu", name="Eve"),
+    "frank": UserRequest(email="frank@school.edu", name="Frank"),
+    "george": UserRequest(email="george@school.edu", name="George"),
+    "helen": UserRequest(email="helen@school.edu", name="Helen"),
+    "iris": UserRequest(email="iris@school.edu", name="Iris"),
+    "jack": UserRequest(email="jack@school.edu", name="Jack"),
+    "kate": UserRequest(email="kate@school.edu", name="Kate"),
+}
 
-    Args:
-        user_id: User ID (default: 1)
-        email: Email address (default: "test@example.com")
-        name: User name (default: "Test User")
+# Test UserRequest objects for creating new test users
+# These are used when tests need to create users that don't exist in sample data
+TEST_USER_REQUESTS = {
+    "test_user": UserRequest(email="test@example.com", name="Test User"),
+    "new_user": UserRequest(email="newuser@example.com", name="New User"),
+    "user1": UserRequest(email="user1@example.com", name="User One"),
+    "user2": UserRequest(email="user2@example.com", name="User Two"),
+    "user3": UserRequest(email="user3@example.com", name="User Three"),
+    "another_user": UserRequest(
+        email="test@example.com", name="Another User"
+    ),
+}
 
-    Returns:
-        User object
-    """
-    return User(id=user_id, email=email, name=name)
+# GroupRequest constants
+# Note: GroupRequest requires created_by_user_id which varies dynamically by test context.
+# Therefore, GroupRequest objects must be created inline in tests when the creator_id
+# is known. This is acceptable as group creation scenarios vary significantly.
+# Standard patterns used in tests:
+# - Test Group with description:
+#     GroupRequest(name="Test Group", description="Test description", created_by_user_id=<user_id>)
+# - Test Group without description:
+#     GroupRequest(name="Test Group", description=None, created_by_user_id=<user_id>)
+# - New Group:
+#     GroupRequest(name="New Group", description="New description", created_by_user_id=<user_id>)
+
+# ExpenseRequest objects matching sample data expenses
+# Keys match SAMPLE_EXPENSES dictionary for consistency
+# Participants match SAMPLE_EXPENSE_PARTICIPANTS
+SAMPLE_EXPENSE_REQUESTS = {
+    "grocery_shopping": ExpenseRequest(
+        group_id=2,
+        description="Grocery shopping",
+        amount=86.40,
+        date="2025-01-10",
+        paid_by_user_id=3,
+        participant_user_ids=[3, 1]
+    ),
+    "utilities_bill": ExpenseRequest(
+        group_id=2,
+        description="Utilities bill",
+        amount=120.00,
+        date="2025-01-15",
+        paid_by_user_id=1,
+        participant_user_ids=[3, 1]
+    ),
+    "restaurant_dinner": ExpenseRequest(
+        group_id=2,
+        description="Restaurant dinner",
+        amount=67.89,
+        date="2025-01-20",
+        paid_by_user_id=4,
+        participant_user_ids=[1, 4]
+    ),
+    "internet_bill": ExpenseRequest(
+        group_id=2,
+        description="Internet bill",
+        amount=100.00,
+        date="2025-01-25",
+        paid_by_user_id=1,
+        participant_user_ids=[3, 1, 4]
+    ),
+    "team_lunch": ExpenseRequest(
+        group_id=3,
+        description="Team lunch",
+        amount=45.67,
+        date="2025-02-01",
+        paid_by_user_id=5,
+        participant_user_ids=[5, 6]
+    ),
+}
+
+# Test ExpenseRequest objects for creating new test expenses
+# These are used when tests need to create expenses that don't exist in sample data
+# Keys describe the purpose of each test expense
+TEST_EXPENSE_REQUESTS = {
+    # Standard test expenses
+    "test_expense_group2": ExpenseRequest(
+        group_id=2,
+        description="Test expense",
+        amount=50.00,
+        date="2025-01-15",
+        paid_by_user_id=1,
+        participant_user_ids=[1]
+    ),
+    "test_expense_group1": ExpenseRequest(
+        group_id=1,
+        description="Test expense",
+        amount=50.00,
+        date="2025-01-15",
+        paid_by_user_id=1,
+        participant_user_ids=[1]
+    ),
+    "hotel_room": ExpenseRequest(
+        group_id=1,
+        description="Hotel room",
+        amount=125.50,
+        date="2025-02-15",
+        paid_by_user_id=1,
+        participant_user_ids=[1]
+    ),
+    "split_expense_group1": ExpenseRequest(
+        group_id=1,
+        description="Split expense",
+        amount=86.40,
+        date="2025-03-05",
+        paid_by_user_id=1,
+        participant_user_ids=[1, 2]
+    ),
+    "gas_for_trip": ExpenseRequest(
+        group_id=1,
+        description="Gas for trip",
+        amount=50.00,
+        date="2025-03-01",
+        paid_by_user_id=1,
+        participant_user_ids=[1, 2]
+    ),
+    "new_expense_group2": ExpenseRequest(
+        group_id=2,
+        description="New expense",
+        amount=25.50,
+        date="2025-02-01",
+        paid_by_user_id=3,
+        participant_user_ids=[3, 1]
+    ),
+    "new_expense_group2_100": ExpenseRequest(
+        group_id=2,
+        description="New expense",
+        amount=100.00,
+        date="2025-02-01",
+        paid_by_user_id=3,
+        participant_user_ids=[3, 1, 4]
+    ),
+    "study_materials": ExpenseRequest(
+        group_id=4,
+        description="Study materials",
+        amount=75.00,
+        date="2025-03-10",
+        paid_by_user_id=8,
+        participant_user_ids=[8, 9, 10, 11]
+    ),
+    "office_supplies": ExpenseRequest(
+        group_id=3,
+        description="Office supplies",
+        amount=30.25,
+        date="2025-03-05",
+        paid_by_user_id=5,
+        participant_user_ids=[5]
+    ),
+    # Updated expenses for update testing
+    "updated_utilities_bill": ExpenseRequest(
+        group_id=2,
+        description="Updated utilities bill",
+        amount=125.00,
+        date="2025-01-16",
+        paid_by_user_id=1,
+        participant_user_ids=[3, 1]
+    ),
+    "updated_grocery_shopping": ExpenseRequest(
+        group_id=2,
+        description="Updated grocery shopping",
+        amount=95.50,
+        date="2025-01-12",
+        paid_by_user_id=3,
+        participant_user_ids=[3, 1, 4]
+    ),
+    "updated_internet_bill": ExpenseRequest(
+        group_id=2,
+        description="Internet bill",
+        amount=100.00,
+        date="2025-01-25",
+        paid_by_user_id=1,
+        participant_user_ids=[1, 4]
+    ),
+    "updated_description": ExpenseRequest(
+        group_id=2,
+        description="Updated description",
+        amount=90.00,
+        date="2025-01-11",
+        paid_by_user_id=1,
+        participant_user_ids=[3, 1]
+    ),
+    "updated_utilities_bill_diff_payer": ExpenseRequest(
+        group_id=2,
+        description="Updated utilities bill",
+        amount=125.00,
+        date="2025-01-16",
+        paid_by_user_id=3,  # Should be ignored in update
+        participant_user_ids=[3, 1]
+    ),
+    "internet_bill_2_participants": ExpenseRequest(
+        group_id=2,
+        description="Internet bill",
+        amount=100.00,
+        date="2025-01-25",
+        paid_by_user_id=1,
+        participant_user_ids=[3, 1]  # Remove David from [3, 1, 4]
+    ),
+    # Error/validation test expenses
+    "bad_expense_group999": ExpenseRequest(
+        group_id=999,
+        description="Bad expense",
+        amount=10.00,
+        date="2025-01-15",
+        paid_by_user_id=1,
+        participant_user_ids=[1]
+    ),
+    "test_expense_user2_payer": ExpenseRequest(
+        group_id=2,
+        description="Test expense",
+        amount=50.00,
+        date="2025-01-15",
+        paid_by_user_id=2,  # User 2 not a member of group 2
+        participant_user_ids=[2]
+    ),
+    "test_expense_empty_participants": ExpenseRequest(
+        group_id=2,
+        description="Test expense",
+        amount=50.00,
+        date="2025-01-15",
+        paid_by_user_id=1,
+        participant_user_ids=[]  # Empty participants for validation
+    ),
+    "test_expense_only_charlie": ExpenseRequest(
+        group_id=2,
+        description="Test expense",
+        amount=50.00,
+        date="2025-01-15",
+        paid_by_user_id=1,
+        participant_user_ids=[3]  # Only Charlie, not Alice
+    ),
+    "test_expense_with_bob": ExpenseRequest(
+        group_id=2,
+        description="Test expense",
+        amount=50.00,
+        date="2025-01-15",
+        paid_by_user_id=1,
+        participant_user_ids=[1, 2]  # Bob not a member of group 2
+    ),
+    "test_expense_invalid_payer": ExpenseRequest(
+        group_id=1,
+        description="Test expense",
+        amount=50.00,
+        date="2025-01-15",
+        paid_by_user_id=999,  # Invalid user ID
+        participant_user_ids=[999]
+    ),
+    "test_failure": ExpenseRequest(
+        group_id=1,
+        description="Test failure",
+        amount=50.00,
+        date="2025-01-15",
+        paid_by_user_id=1,
+        participant_user_ids=[1]
+    ),
+}
