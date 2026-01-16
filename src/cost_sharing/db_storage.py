@@ -454,3 +454,52 @@ class DatabaseCostStorage:
             'INSERT INTO expense_participants (expense_id, user_id) VALUES (?, ?)',
             (expense_id, user_id)
         )
+
+    def get_expense_by_id(self, expense_id):
+        """
+        Get expense by ID.
+
+        Args:
+            expense_id: Expense ID
+
+        Returns:
+            Expense object with paidBy and splitBetween populated if found,
+            None otherwise
+
+        Raises:
+            StorageException: If a database error occurs
+        """
+        try:
+            cursor = self._conn.execute(
+                '''
+                SELECT e.id, e.group_id, e.description, e.amount, e.expense_date,
+                       payer.id as payer_id, payer.email as payer_email, payer.name as payer_name
+                FROM expenses e
+                INNER JOIN users payer ON e.paid_by_user_id = payer.id
+                WHERE e.id = ?
+                ''',
+                (expense_id,)
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+
+            participants = self._get_expense_participants(expense_id)
+            payer = User(
+                id=row['payer_id'],
+                email=row['payer_email'],
+                name=row['payer_name']
+            )
+            return Expense(
+                id=row['id'],
+                group_id=row['group_id'],
+                description=row['description'],
+                amount=float(row['amount']),
+                date=row['expense_date'],
+                paid_by=payer,
+                split_between=participants
+            )
+        except sqlite3.Error as e:
+            raise StorageException(
+                f"Database error retrieving expense by ID: {e}"
+            ) from e

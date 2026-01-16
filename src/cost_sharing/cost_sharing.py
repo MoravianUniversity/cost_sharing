@@ -5,7 +5,8 @@ from cost_sharing.exceptions import (
     GroupNotFoundError,
     ForbiddenError,
     ConflictError,
-    ValidationError
+    ValidationError,
+    ExpenseNotFoundError
 )
 
 
@@ -214,3 +215,39 @@ class CostSharing:
         created_expense.per_person_amount = round(created_expense.amount / num_participants, 2)
 
         return created_expense
+
+    def get_expense_by_id(self, expense_id, group_id, user_id):
+        """
+        Get expense by ID, ensuring the user is a member of the group.
+
+        Args:
+            expense_id: Expense ID
+            group_id: Group ID
+            user_id: User ID of the requesting user (must be a member)
+
+        Returns:
+            Expense object with per_person_amount calculated
+
+        Raises:
+            ExpenseNotFoundError: If expense doesn't exist
+            GroupNotFoundError: If group doesn't exist
+            ForbiddenError: If user is not a member of the group
+        """
+        # Verify authorization (raises GroupNotFoundError or ForbiddenError if invalid)
+        self.get_group_by_id(group_id, user_id)
+
+        # Get expense from storage
+        expense = self._storage.get_expense_by_id(expense_id)
+
+        if expense is None:
+            raise ExpenseNotFoundError(f"Expense with ID {expense_id} not found")
+
+        # Verify expense belongs to the group
+        if expense.group_id != group_id:
+            raise ExpenseNotFoundError(f"Expense with ID {expense_id} not found")
+
+        # Calculate per_person_amount
+        num_participants = len(expense.split_between)
+        expense.per_person_amount = round(expense.amount / num_participants, 2)
+
+        return expense

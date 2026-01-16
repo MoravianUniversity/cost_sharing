@@ -1028,7 +1028,10 @@ function renderExpenses(expenses) {
                             </td>
                             <td style="text-align: right;">
                                 ${isPayer ? 
-                                    '<div style="display: flex; gap: 10px; justify-content: flex-end;"><button class="small secondary">Edit</button><button class="small danger">Delete</button></div>' :
+                                    `<div style="display: flex; gap: 10px; justify-content: flex-end;">
+                                        <button class="small secondary" onclick="handleEditExpense(${expense.id}, ${expense.groupId})">Edit</button>
+                                        <button class="small danger" onclick="handleDeleteExpense(${expense.id}, ${expense.groupId})">Delete</button>
+                                    </div>` :
                                     ''
                                 }
                             </td>
@@ -1052,6 +1055,303 @@ function renderExpenses(expenses) {
     `;
 
     expensesContainer.innerHTML = expensesHtml;
+}
+
+function handleEditExpense(expenseId, groupId) {
+    if (!currentToken) {
+        showError('You must be logged in to edit an expense');
+        return;
+    }
+    fetchExpenseDetails(expenseId, groupId);
+}
+
+function fetchExpenseDetails(expenseId, groupId) {
+    fetch(`${API_BASE}/groups/${groupId}/expenses/${expenseId}`, {
+        headers: {
+            'Authorization': `Bearer ${currentToken}`
+        }
+    })
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 401) {
+                    logout();
+                    throw new Error('Authentication failed');
+                }
+                if (response.status === 403) {
+                    throw new Error('You do not have access to this expense');
+                }
+                if (response.status === 404) {
+                    throw new Error('Expense not found');
+                }
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Failed to fetch expense details');
+                });
+            }
+            return response.json();
+        })
+        .then(expense => {
+            showEditExpenseModal(expense);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError(error.message || 'Failed to fetch expense details');
+        });
+}
+
+function showEditExpenseModal(expense) {
+    if (!currentGroup || !currentUser) {
+        return;
+    }
+
+    // Create modal if it doesn't exist
+    let modalOverlay = document.getElementById('edit-expense-modal');
+    if (!modalOverlay) {
+        modalOverlay = document.createElement('div');
+        modalOverlay.id = 'edit-expense-modal';
+        modalOverlay.className = 'modal-overlay';
+        modalOverlay.innerHTML = `
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>Edit Expense</h2>
+                    <button class="modal-close" onclick="closeEditExpenseModal()">&times;</button>
+                </div>
+                <p id="edit-expense-payer-message">You (${escapeHtml(currentUser.name)}) are recorded as the person who paid for this expense.</p>
+                <form id="edit-expense-form" onsubmit="submitEditExpense(event)">
+                    <div class="form-group">
+                        <label for="edit-expense-description">Description <span class="required">*</span></label>
+                        <input type="text" id="edit-expense-description" name="description" required 
+                               placeholder="e.g., Grocery shopping" maxlength="200">
+                        <small class="form-help">Required. 1-200 characters.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-expense-amount">Amount ($) <span class="required">*</span></label>
+                        <input type="number" id="edit-expense-amount" name="amount" step="0.01" min="0.01" 
+                               placeholder="0.00" required>
+                        <small class="form-help">Required. Minimum $0.01.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-expense-date">Date <span class="required">*</span></label>
+                        <input type="date" id="edit-expense-date" name="date" required>
+                        <small class="form-help">Required. Date when the expense occurred.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Split between (select all who should share this expense) <span class="required">*</span></label>
+                        <div class="checkbox-group" id="edit-expense-split-between">
+                            <!-- Checkboxes will be dynamically inserted here -->
+                        </div>
+                        <small class="form-help">Required. You must be included. Select all group members who should share this expense.</small>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="secondary" onclick="closeEditExpenseModal()">Cancel</button>
+                        <button type="submit">Update Expense</button>
+                    </div>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(modalOverlay);
+        
+        // Close modal when clicking outside
+        modalOverlay.addEventListener('click', function(event) {
+            if (event.target === modalOverlay) {
+                closeEditExpenseModal();
+            }
+        });
+    }
+
+    // Populate form with expense data
+    document.getElementById('edit-expense-description').value = expense.description || '';
+    document.getElementById('edit-expense-amount').value = expense.amount || '';
+    document.getElementById('edit-expense-date').value = expense.date || '';
+
+    // Update payer message
+    const payerMessage = document.getElementById('edit-expense-payer-message');
+    if (payerMessage && expense.paidBy) {
+        payerMessage.textContent = `You (${expense.paidBy.name}) are recorded as the person who paid for this expense.`;
+    }
+
+    // Populate checkboxes with group members
+    const checkboxGroup = document.getElementById('edit-expense-split-between');
+    if (checkboxGroup && currentGroup.members) {
+        const participantIds = expense.splitBetween.map(p => p.id);
+        checkboxGroup.innerHTML = currentGroup.members.map(member => {
+            const isCurrentUser = member.id === currentUser.id;
+            const isParticipant = participantIds.includes(member.id);
+            return `
+                <div class="checkbox-item">
+                    <input type="checkbox" id="edit-split-${member.id}" value="${member.id}" 
+                           ${isCurrentUser ? 'checked disabled' : (isParticipant ? 'checked' : '')}>
+                    <label for="edit-split-${member.id}" ${isCurrentUser ? 'style="color: #6c757d;"' : ''}>
+                        ${escapeHtml(member.name)} (${escapeHtml(member.email)})${isCurrentUser ? ' (payer)' : ''}
+                    </label>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // Store expense ID and group ID for form submission
+    modalOverlay.dataset.expenseId = expense.id;
+    modalOverlay.dataset.groupId = expense.groupId;
+
+    modalOverlay.classList.add('active');
+    const descriptionInput = document.getElementById('edit-expense-description');
+    if (descriptionInput) {
+        descriptionInput.focus();
+    }
+}
+
+function closeEditExpenseModal() {
+    const modalOverlay = document.getElementById('edit-expense-modal');
+    if (modalOverlay) {
+        modalOverlay.classList.remove('active');
+        const form = document.getElementById('edit-expense-form');
+        if (form) {
+            form.reset();
+        }
+        // Clear any validation errors
+        clearFormErrors('edit-expense-form');
+    }
+}
+
+function submitEditExpense(event) {
+    event.preventDefault();
+    
+    if (!currentToken) {
+        showError('You must be logged in to update an expense');
+        return;
+    }
+
+    const modalOverlay = document.getElementById('edit-expense-modal');
+    if (!modalOverlay) {
+        return;
+    }
+
+    const expenseId = modalOverlay.dataset.expenseId;
+    const groupId = modalOverlay.dataset.groupId;
+
+    if (!expenseId || !groupId) {
+        showError('Expense information not available');
+        return;
+    }
+
+    if (!currentUser) {
+        showError('User information not available');
+        return;
+    }
+
+    const form = event.target;
+    const formData = new FormData(form);
+    const description = formData.get('description').trim();
+    const amount = parseFloat(formData.get('amount'));
+    const date = formData.get('date');
+
+    // Clear previous errors
+    clearFormErrors('edit-expense-form');
+
+    // Validate description
+    if (!description || description.length === 0) {
+        showFormError('edit-expense-description', 'Description is required');
+        return;
+    }
+    if (description.length > 200) {
+        showFormError('edit-expense-description', 'Description must be at most 200 characters');
+        return;
+    }
+
+    // Validate amount
+    if (!amount || isNaN(amount)) {
+        showFormError('edit-expense-amount', 'Amount is required');
+        return;
+    }
+    if (amount < 0.01) {
+        showFormError('edit-expense-amount', 'Amount must be at least $0.01');
+        return;
+    }
+
+    // Validate date
+    if (!date) {
+        showFormError('edit-expense-date', 'Date is required');
+        return;
+    }
+    // Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+        showFormError('edit-expense-date', 'Date must be in YYYY-MM-DD format');
+        return;
+    }
+
+    // Get selected users for splitBetween
+    const checkboxes = document.querySelectorAll('#edit-expense-split-between input[type="checkbox"]:checked');
+    const splitBetween = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+    // Validate splitBetween
+    if (splitBetween.length === 0) {
+        showError('You must select at least one person to split the expense with');
+        return;
+    }
+
+    // Validate current user is included (should always be true since checkbox is checked and disabled)
+    if (!splitBetween.includes(currentUser.id)) {
+        showError('You must be included in the expense split');
+        return;
+    }
+
+    // Validate all selected users are group members (client-side validation)
+    if (currentGroup.members) {
+        const memberIds = currentGroup.members.map(m => m.id);
+        const invalidUsers = splitBetween.filter(userId => !memberIds.includes(userId));
+        if (invalidUsers.length > 0) {
+            showError('All selected users must be members of this group');
+            return;
+        }
+    }
+
+    // Prepare request body
+    const requestBody = {
+        description: description,
+        amount: amount,
+        date: date,
+        splitBetween: splitBetween
+    };
+
+    // Disable form during submission
+    const submitButton = form.querySelector('button[type="submit"]');
+    const originalText = submitButton.textContent;
+    submitButton.disabled = true;
+    submitButton.textContent = 'Updating...';
+
+    fetch(`${API_BASE}/groups/${groupId}/expenses/${expenseId}`, {
+        method: 'PUT',
+        headers: {
+            'Authorization': `Bearer ${currentToken}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+    })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Failed to update expense');
+                });
+            }
+            return response.json();
+        })
+        .then(expense => {
+            closeEditExpenseModal();
+            // Reload expenses data
+            fetchGroupExpenses(groupId);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError(error.message || 'Failed to update expense');
+        })
+        .finally(() => {
+            submitButton.disabled = false;
+            submitButton.textContent = originalText;
+        });
+}
+
+function handleDeleteExpense(expenseId, groupId) {
+    alert('Delete expense functionality not yet implemented');
 }
 
 function escapeHtml(text) {

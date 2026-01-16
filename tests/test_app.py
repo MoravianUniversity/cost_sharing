@@ -1500,3 +1500,152 @@ def test_create_expense_invalid_json(api_client, oauth_handler):
     )
 
     assert_validation_error_response(response, 'Invalid JSON')
+
+
+# ============================================================================
+# GET /groups/{groupId}/expenses/{expenseId} Tests
+# ============================================================================
+
+def test_get_expense_success(api_client, oauth_handler):
+    """Test successful expense retrieval - User 1 (Alice) accessing expense 1."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.get(
+        '/groups/2/expenses/1',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    data = assert_json_response(response, expected_status=200)
+    assert data['id'] == 1
+    assert data['groupId'] == 2
+    assert data['description'] == "Grocery shopping"
+    assert data['amount'] == 86.40
+    assert data['date'] == "2025-01-10"
+    assert data['paidBy']['id'] == 3
+    assert data['paidBy']['email'] == "charlie@school.edu"
+    assert data['paidBy']['name'] == "Charlie"
+    assert len(data['splitBetween']) == 2
+    assert data['perPersonAmount'] == 43.20
+
+
+def test_get_expense_missing_header(api_client):
+    """Test GET /groups/{groupId}/expenses/{expenseId} without Authorization header."""
+    response = api_client.get('/groups/2/expenses/1')
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_get_expense_invalid_header_format(api_client):
+    """Test GET /groups/{groupId}/expenses/{expenseId} with invalid Authorization header."""
+    response = api_client.get(
+        '/groups/2/expenses/1',
+        headers={'Authorization': 'InvalidFormat token'}
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_get_expense_expired_token(api_client, oauth_handler):
+    """Test GET /groups/{groupId}/expenses/{expenseId} with expired token."""
+    oauth_handler.validate_token_raises(TokenExpiredError("Token expired"))
+
+    response = api_client.get(
+        '/groups/2/expenses/1',
+        headers={'Authorization': 'Bearer expired-token'}
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_get_expense_invalid_token(api_client, oauth_handler):
+    """Test GET /groups/{groupId}/expenses/{expenseId} with invalid token."""
+    oauth_handler.validate_token_raises(TokenInvalidError("Invalid token"))
+
+    response = api_client.get(
+        '/groups/2/expenses/1',
+        headers={'Authorization': 'Bearer invalid-token'}
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_get_expense_not_found(api_client, oauth_handler):
+    """Test GET /groups/{groupId}/expenses/{expenseId} when expense doesn't exist."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.get(
+        '/groups/2/expenses/999',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 404, "Resource not found", "Expense not found")
+
+
+def test_get_expense_group_not_found(api_client, oauth_handler):
+    """Test GET /groups/{groupId}/expenses/{expenseId} when group doesn't exist."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.get(
+        '/groups/999/expenses/1',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 404, "Resource not found", "Group not found")
+
+
+def test_get_expense_forbidden(api_client, oauth_handler):
+    """Test GET /groups/{groupId}/expenses/{expenseId} when user is not a member."""
+    # User 2 (Bob) is NOT a member of group 2 (roommates)
+    oauth_handler.validate_token_returns(2)
+
+    response = api_client.get(
+        '/groups/2/expenses/1',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 403, "Forbidden", "Access denied")
+
+
+def test_get_expense_wrong_group(api_client, oauth_handler):
+    """Test GET /groups/{groupId}/expenses/{expenseId} when expense belongs to different group."""
+    oauth_handler.validate_token_returns(1)
+
+    # Expense 1 belongs to group 2, but we're querying group 1
+    response = api_client.get(
+        '/groups/1/expenses/1',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 404, "Resource not found", "Expense not found")
+
+
+def test_get_expense_response_structure(api_client, oauth_handler):
+    """Test GET /groups/{groupId}/expenses/{expenseId} response has correct structure."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.get(
+        '/groups/2/expenses/4',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    data = assert_json_response(response, expected_status=200)
+    assert 'id' in data
+    assert 'groupId' in data
+    assert 'description' in data
+    assert 'amount' in data
+    assert 'date' in data
+    assert 'paidBy' in data
+    assert 'splitBetween' in data
+    assert 'perPersonAmount' in data
+
+    # Verify paidBy structure
+    assert 'id' in data['paidBy']
+    assert 'email' in data['paidBy']
+    assert 'name' in data['paidBy']
+
+    # Verify splitBetween structure
+    assert isinstance(data['splitBetween'], list)
+    for participant in data['splitBetween']:
+        assert 'id' in participant
+        assert 'email' in participant
+        assert 'name' in participant

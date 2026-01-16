@@ -19,7 +19,7 @@ from helpers import (
 from cost_sharing.models import UserRequest, GroupRequest, ExpenseRequest
 from cost_sharing.exceptions import (
     UserNotFoundError, GroupNotFoundError, ForbiddenError, ConflictError,
-    ValidationError
+    ValidationError, ExpenseNotFoundError
 )
 
 
@@ -518,3 +518,63 @@ def test_create_expense_raises_validation_error_invalid_participant(app_with_sam
         )
         app.create_expense(expense_request)
     assert "All users in splitBetween must be members of the group" in str(exc_info.value)
+
+
+# ============================================================================
+# get_expense_by_id Tests
+# ============================================================================
+
+def test_get_expense_by_id_succeeds(app_with_sample_data):
+    """Test get_expense_by_id returns expense for member"""
+    app = app_with_sample_data
+    # User 1 (Alice) is a member of group 2, expense 1 exists
+    expense = app.get_expense_by_id(1, 2, 1)
+    assert expense.id == 1
+    assert expense.description == "Grocery shopping"
+    assert expense.amount == 86.40
+    assert expense.per_person_amount is not None
+    assert expense.per_person_amount == 43.20
+
+
+def test_get_expense_by_id_calculates_per_person_amount(app_with_sample_data):
+    """Test get_expense_by_id calculates per_person_amount correctly"""
+    app = app_with_sample_data
+    # Expense 4 (internet_bill) is $100.00 split 3 ways = $33.33
+    expense = app.get_expense_by_id(4, 2, 1)
+    assert expense.per_person_amount == 33.33
+
+
+def test_get_expense_by_id_raises_expense_not_found_error(app_with_sample_data):
+    """Test get_expense_by_id raises ExpenseNotFoundError for invalid expense"""
+    app = app_with_sample_data
+    with pytest.raises(ExpenseNotFoundError,
+                      match="Expense with ID 999 not found"):
+        app.get_expense_by_id(999, 2, 1)
+
+
+def test_get_expense_by_id_raises_group_not_found_error(app_with_sample_data):
+    """Test get_expense_by_id raises GroupNotFoundError for invalid group"""
+    app = app_with_sample_data
+    with pytest.raises(GroupNotFoundError,
+                      match="Group with ID 999 not found"):
+        app.get_expense_by_id(1, 999, 1)
+
+
+def test_get_expense_by_id_raises_forbidden_error_for_non_member(
+        app_with_sample_data):
+    """Test get_expense_by_id raises ForbiddenError for non-member"""
+    app = app_with_sample_data
+    # User 2 (Bob) is NOT a member of group 2
+    with pytest.raises(ForbiddenError, match="You do not have access"):
+        app.get_expense_by_id(1, 2, 2)
+
+
+def test_get_expense_by_id_raises_error_when_expense_not_in_group(
+        app_with_sample_data):
+    """Test get_expense_by_id raises ExpenseNotFoundError when expense
+    belongs to different group"""
+    app = app_with_sample_data
+    # Expense 1 belongs to group 2, but we're querying group 1
+    with pytest.raises(ExpenseNotFoundError,
+                      match="Expense with ID 1 not found"):
+        app.get_expense_by_id(1, 1, 1)

@@ -576,3 +576,34 @@ def test_create_expense_raises_storage_exception_on_database_error(error_storage
         )
         storage.create_expense(expense_request)
     assert "Database error creating expense" in str(exc_info.value)
+
+
+# ============================================================================
+# get_expense_by_id Tests
+# ============================================================================
+
+def test_get_expense_by_id_returns_expense_when_exists(db_storage_with_sample_data):
+    """Test get_expense_by_id returns expense when it exists"""
+    storage = db_storage_with_sample_data
+    # Expense 1 is grocery_shopping
+    expense = storage.get_expense_by_id(1)
+    assert expense is not None
+    assert expense.id == 1
+    assert expense.description == "Grocery shopping"
+    assert expense.amount == 86.40
+    assert expense.group_id == 2
+    assert_user_is(expense.paid_by, "charlie")
+    assert_expense_participants(expense, [3, 1])
+
+
+def test_get_expense_by_id_returns_none_when_not_exists(empty_db_storage):
+    """Test get_expense_by_id returns None when expense doesn't exist"""
+    expense = empty_db_storage.get_expense_by_id(999)
+    assert expense is None
+
+
+def test_get_expense_by_id_raises_storage_exception_on_database_error(error_storage):
+    """Test get_expense_by_id raises StorageException on database error"""
+    with pytest.raises(StorageException,
+                      match="Database error retrieving expense by ID"):
+        error_storage.get_expense_by_id(1)

@@ -13,6 +13,10 @@ class GroupNotFoundError(Exception):
     """Raised when a requested group cannot be found"""
 
 
+class ExpenseNotFoundError(Exception):
+    """Raised when a requested expense cannot be found"""
+
+
 class ForbiddenError(Exception):
     """Raised when a user does not have permission to perform an action"""
 
