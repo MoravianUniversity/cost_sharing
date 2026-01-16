@@ -2,7 +2,9 @@
 
 import sqlite3
 
-from cost_sharing.models import User, Group, Expense
+from cost_sharing.models import (
+    User, Group, Expense
+)
 from cost_sharing.exceptions import StorageException
 
 
@@ -52,13 +54,12 @@ class DatabaseCostStorage:
         except sqlite3.Error as e:
             raise StorageException(f"Database error retrieving user by email: {e}") from e
 
-    def create_user(self, email, name):
+    def create_user(self, user):
         """
         Create a new user.
 
         Args:
-            email: User's email address
-            name: User's name
+            user: UserRequest with email and name
 
         Returns:
             Newly created User object
@@ -70,11 +71,11 @@ class DatabaseCostStorage:
         try:
             cursor = self._conn.execute(
                 'INSERT INTO users (email, name) VALUES (?, ?)',
-                (email, name)
+                (user.email, user.name)
             )
             self._conn.commit()
             user_id = cursor.lastrowid
-            return User(id=user_id, email=email, name=name)
+            return User(id=user_id, email=user.email, name=user.name)
         except sqlite3.Error as e:
             self._conn.rollback()
             raise StorageException(f"Database error creating user: {e}") from e
@@ -178,20 +179,17 @@ class DatabaseCostStorage:
         """
         Private helper to build a User object for the creator from a group row.
         """
-        return User(
-            id=row['creator_id'],
+        return User(id=row['creator_id'],
             email=row['creator_email'],
             name=row['creator_name']
         )
 
-    def create_group(self, name, description, created_by_user_id):
+    def create_group(self, group):
         """
         Create a new group with the specified user as creator and member.
 
         Args:
-            name: Group name (must be at least 1 character)
-            description: group description (0 to 500 characters)
-            created_by_user_id: User ID of the group creator
+            group: GroupRequest with name, description, and created_by_user_id
 
         Returns:
             Group object for the newly created group with creator and members populated
@@ -201,21 +199,21 @@ class DatabaseCostStorage:
         """
         try:
             # Get creator information
-            creator = self.get_user_by_id(created_by_user_id)
+            creator = self.get_user_by_id(group.created_by_user_id)
             if creator is None:
                 # This should not happen if business logic is correct, but handle gracefully
-                raise StorageException(f"User with ID {created_by_user_id} not found")
+                raise StorageException(f"User with ID {group.created_by_user_id} not found")
 
             # Insert group
-            group_id = self._insert_group(name, description, created_by_user_id)
+            group_id = self._insert_group(group.name, group.description, group.created_by_user_id)
             # Add creator as member
-            self._add_group_member(group_id, created_by_user_id)
+            self._add_group_member(group_id, group.created_by_user_id)
             self._conn.commit()
 
             return Group(
                 id=group_id,
-                name=name,
-                description=description or '',
+                name=group.name,
+                description=group.description or '',
                 created_by=creator,
                 members=[creator]
             )
@@ -389,3 +387,70 @@ class DatabaseCostStorage:
             )
             for participant_row in participant_rows
         ]
+
+    def create_expense(self, expense):
+        """
+        Create a new expense with participants.
+
+        Args:
+            expense: ExpenseRequest with group_id, description, amount,
+                date, paid_by_user_id, and participant_user_ids
+
+        Returns:
+            Expense object with paidBy and splitBetween populated
+
+        Raises:
+            StorageException: If a database error occurs
+        """
+        try:
+            # Insert expense (database enforces foreign key constraint on paid_by_user_id)
+            expense_id = self._insert_expense(expense)
+
+            # Add all participants
+            for user_id in expense.participant_user_ids:
+                self._add_expense_participant(expense_id, user_id)
+
+            self._conn.commit()
+
+            # Get payer user information (needed for return value)
+            # If insert succeeded, payer must exist (foreign key constraint enforced it)
+            payer = self.get_user_by_id(expense.paid_by_user_id)
+            # Get all participants
+            participants = self._get_expense_participants(expense_id)
+
+            return Expense(
+                id=expense_id,
+                group_id=expense.group_id,
+                description=expense.description,
+                amount=float(expense.amount),
+                date=expense.date,
+                paid_by=payer,
+                split_between=participants
+            )
+        except sqlite3.Error as e:
+            self._conn.rollback()
+            raise StorageException(f"Database error creating expense: {e}") from e
+
+    def _insert_expense(self, expense):
+        """
+        Private helper to insert a new expense and return its id.
+        """
+        cursor = self._conn.execute(
+            ('INSERT INTO expenses (group_id, description, amount, expense_date, '
+             'paid_by_user_id) VALUES (?, ?, ?, ?, ?)'),
+            (expense.group_id,
+             expense.description,
+             expense.amount,
+             expense.date,
+             expense.paid_by_user_id)
+        )
+        return cursor.lastrowid
+
+    def _add_expense_participant(self, expense_id, user_id):
+        """
+        Private helper to add a user as a participant to an expense.
+        """
+        self._conn.execute(
+            'INSERT INTO expense_participants (expense_id, user_id) VALUES (?, ?)',
+            (expense_id, user_id)
+        )

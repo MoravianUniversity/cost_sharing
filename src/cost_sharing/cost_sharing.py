@@ -4,7 +4,8 @@ from cost_sharing.exceptions import (
     UserNotFoundError,
     GroupNotFoundError,
     ForbiddenError,
-    ConflictError
+    ConflictError,
+    ValidationError
 )
 
 
@@ -38,21 +39,20 @@ class CostSharing:
             raise UserNotFoundError(f"User with ID {user_id} not found")
         return user
 
-    def get_or_create_user(self, email, name):
+    def get_or_create_user(self, user):
         """
         Get existing user or create new user.
 
         Args:
-            email: User's email
-            name: User's name
+            user: UserRequest with email and name
 
         Returns:
             User object (existing or newly created)
         """
-        user = self._storage.get_user_by_email(email)
-        if user is not None:
-            return user
-        return self._storage.create_user(email, name)
+        existing_user = self._storage.get_user_by_email(user.email)
+        if existing_user is not None:
+            return existing_user
+        return self._storage.create_user(user)
 
     def get_user_groups(self, user_id):
         """
@@ -66,14 +66,12 @@ class CostSharing:
         """
         return self._storage.get_user_groups(user_id)
 
-    def create_group(self, user_id, name, description=''):
+    def create_group(self, group):
         """
         Create a new group with the specified user as creator and member.
 
         Args:
-            user_id: User ID of the group creator
-            name: Group name (must be at least 1 character)
-            description: Optional group description (max 500 characters)
+            group: GroupRequest with name, description, and created_by_user_id
 
         Returns:
             Group object for the newly created group
@@ -82,8 +80,8 @@ class CostSharing:
             UserNotFoundError: If user with the given ID is not found
         """
         # Business logic: verify user exists - will raise UserNotFoundError if user does not exist
-        self.get_user_by_id(user_id)
-        return self._storage.create_group(name, description, user_id)
+        self.get_user_by_id(group.created_by_user_id)
+        return self._storage.create_group(group)
 
     def get_group_by_id(self, group_id, user_id):
         """
@@ -111,15 +109,14 @@ class CostSharing:
 
         return group
 
-    def add_group_member(self, group_id, caller_user_id, email, name):
+    def add_group_member(self, group_id, caller_user_id, user):
         """
         Add a member to a group by email. Creates user account if user doesn't exist.
 
         Args:
             group_id: Group ID to add member to
             caller_user_id: User ID of the authenticated caller (must be a member)
-            email: Email address of the user to add
-            name: Name of the user to add
+            user: UserRequest with email and name of the user to add
 
         Returns:
             Group object with updated members list
@@ -133,15 +130,15 @@ class CostSharing:
         group = self.get_group_by_id(group_id, caller_user_id)
 
         # Get or create the user
-        user = self.get_or_create_user(email, name)
+        new_user = self.get_or_create_user(user)
 
         # Check if user is already a member
         user_ids = [member.id for member in group.members]
-        if user.id in user_ids:
+        if new_user.id in user_ids:
             raise ConflictError("User is already a member of this group")
 
         # Add member to group
-        self._storage.add_group_member(group_id, user.id)
+        self._storage.add_group_member(group_id, new_user.id)
 
         # Return updated group
         return self._storage.get_group_by_id(group_id)
@@ -173,3 +170,47 @@ class CostSharing:
             expense.per_person_amount = round(expense.amount / num_participants, 2)
 
         return expenses
+
+    def create_expense(self, expense):
+        """
+        Create a new expense in a group.
+
+        Args:
+            expense: ExpenseRequest with group_id, description, amount,
+                date, paid_by_user_id, and participant_user_ids
+
+        Returns:
+            Expense object with per_person_amount calculated
+
+        Raises:
+            GroupNotFoundError: If group doesn't exist
+            ForbiddenError: If user is not a member of the group
+            ValidationError: If validation fails (user not in splitBetween, 
+                invalid participants, etc.)
+        """
+        # Verify authorization (raises GroupNotFoundError or ForbiddenError if invalid)
+        group = self.get_group_by_id(expense.group_id, expense.paid_by_user_id)
+
+        # Validate split_between is not empty
+        participant_ids = expense.participant_user_ids
+        if not participant_ids or len(participant_ids) == 0:
+            raise ValidationError("splitBetween must contain at least one user ID")
+
+        # Validate user is included in split_between
+        if expense.paid_by_user_id not in participant_ids:
+            raise ValidationError("splitBetween must include the authenticated user's ID")
+
+        # Validate all users in split_between are group members
+        member_ids = [member.id for member in group.members]
+        invalid_users = [uid for uid in participant_ids if uid not in member_ids]
+        if invalid_users:
+            raise ValidationError("All users in splitBetween must be members of the group")
+
+        # Create expense in storage layer
+        created_expense = self._storage.create_expense(expense)
+
+        # Calculate per_person_amount
+        num_participants = len(created_expense.split_between)
+        created_expense.per_person_amount = round(created_expense.amount / num_participants, 2)
+
+        return created_expense
