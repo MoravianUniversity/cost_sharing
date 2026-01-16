@@ -389,3 +389,71 @@ class DatabaseCostStorage:
             )
             for participant_row in participant_rows
         ]
+
+    def create_expense(self, group_id, description, amount, expense_date, paid_by_user_id, participant_user_ids):
+        """
+        Create a new expense with participants.
+
+        Args:
+            group_id: Group ID
+            description: Expense description (1-200 characters)
+            amount: Expense amount (>= 0.01)
+            expense_date: Expense date (YYYY-MM-DD format)
+            paid_by_user_id: User ID of the person who paid
+            participant_user_ids: List of user IDs who the expense is split between
+
+        Returns:
+            Expense object with paidBy and splitBetween populated
+
+        Raises:
+            StorageException: If a database error occurs
+        """
+        try:
+            # Insert expense (database enforces foreign key constraint on paid_by_user_id)
+            expense_id = self._insert_expense(
+                group_id, description, amount, expense_date, paid_by_user_id)
+
+            # Add all participants
+            for user_id in participant_user_ids:
+                self._add_expense_participant(expense_id, user_id)
+
+            self._conn.commit()
+
+            # Get payer user information (needed for return value)
+            # If insert succeeded, payer must exist (foreign key constraint enforced it)
+            payer = self.get_user_by_id(paid_by_user_id)
+            # Get all participants
+            participants = self._get_expense_participants(expense_id)
+
+            return Expense(
+                id=expense_id,
+                group_id=group_id,
+                description=description,
+                amount=float(amount),
+                date=expense_date,
+                paid_by=payer,
+                split_between=participants
+            )
+        except sqlite3.Error as e:
+            self._conn.rollback()
+            raise StorageException(f"Database error creating expense: {e}") from e
+
+    def _insert_expense(self, group_id, description, amount, expense_date, paid_by_user_id):
+        """
+        Private helper to insert a new expense and return its id.
+        """
+        cursor = self._conn.execute(
+            ('INSERT INTO expenses (group_id, description, amount, expense_date, '
+             'paid_by_user_id) VALUES (?, ?, ?, ?, ?)'),
+            (group_id, description, amount, expense_date, paid_by_user_id)
+        )
+        return cursor.lastrowid
+
+    def _add_expense_participant(self, expense_id, user_id):
+        """
+        Private helper to add a user as a participant to an expense.
+        """
+        self._conn.execute(
+            'INSERT INTO expense_participants (expense_id, user_id) VALUES (?, ?)',
+            (expense_id, user_id)
+        )

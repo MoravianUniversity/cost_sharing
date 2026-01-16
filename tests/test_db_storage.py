@@ -15,7 +15,7 @@ from unittest.mock import MagicMock
 import pytest
 from helpers import assert_user_matches, assert_groups_are, \
     assert_user_is, assert_group_matches, assert_group_is, assert_group_has_members, \
-    assert_expenses_are, assert_expense_participants
+    assert_expenses_are, assert_expense_participants, assert_expense_matches_retrieved
 from cost_sharing.db_storage import DatabaseCostStorage
 from cost_sharing.exceptions import StorageException
 
@@ -437,3 +437,124 @@ def test_get_group_expenses_raises_storage_exception_on_database_error(error_sto
     with pytest.raises(StorageException) as exc_info:
         storage.get_group_expenses(1)
     assert "Database error retrieving group expenses" in str(exc_info.value)
+
+
+# ============================================================================
+# create_expense Tests
+# ============================================================================
+
+def test_create_expense_adds_expense_to_group_with_no_expenses(db_storage_with_sample_data):
+    """Test create_expense successfully creates expense in group with no existing expenses"""
+    storage = db_storage_with_sample_data
+    # Group 1 (weekend_trip) has no expenses, members are [1, 2] (Alice, Bob)
+
+    expense = storage.create_expense(
+        group_id=1,
+        description="Gas for trip",
+        amount=50.00,
+        expense_date="2025-03-01",
+        paid_by_user_id=1,
+        participant_user_ids=[1, 2]
+    )
+
+    # Verify expense was added to database by retrieving it
+    expenses = storage.get_group_expenses(1)
+    assert len(expenses) == 1
+    assert_expense_matches_retrieved(expense, expenses)
+
+
+def test_create_expense_adds_expense_to_group_with_existing_expenses(db_storage_with_sample_data):
+    """Test create_expense successfully creates expense in group with existing expenses"""
+    storage = db_storage_with_sample_data
+    # Group 2 (roommates) has expenses 1-4, members are [3, 1, 4] (Charlie, Alice, David)
+
+    expense = storage.create_expense(
+        group_id=2,
+        description="New expense",
+        amount=25.50,
+        expense_date="2025-02-01",
+        paid_by_user_id=3,
+        participant_user_ids=[3, 1]
+    )
+
+    # Verify expense was added to database - group should now have 5 expenses
+    expenses = storage.get_group_expenses(2)
+    assert len(expenses) == 5
+    assert_expense_matches_retrieved(expense, expenses)
+
+
+def test_create_expense_with_multiple_participants(db_storage_with_sample_data):
+    """Test create_expense works with multiple participants"""
+    storage = db_storage_with_sample_data
+    # Group 4 (study_group) has members [8, 9, 10, 11, 2] (Helen, Iris, Jack, Kate, Bob)
+
+    expense = storage.create_expense(
+        group_id=4,
+        description="Study materials",
+        amount=75.00,
+        expense_date="2025-03-10",
+        paid_by_user_id=8,
+        participant_user_ids=[8, 9, 10, 11]
+    )
+
+    # Verify expense was added to database
+    expenses = storage.get_group_expenses(4)
+    assert_expense_matches_retrieved(expense, expenses)
+
+
+def test_create_expense_with_single_participant(db_storage_with_sample_data):
+    """Test create_expense works with single participant"""
+    storage = db_storage_with_sample_data
+    # Group 3 (project_team) has members [5, 6] (Eve, Frank)
+
+    expense = storage.create_expense(
+        group_id=3,
+        description="Office supplies",
+        amount=30.25,
+        expense_date="2025-03-05",
+        paid_by_user_id=5,
+        participant_user_ids=[5]
+    )
+
+    # Verify expense was added to database
+    expenses = storage.get_group_expenses(3)
+    assert_expense_matches_retrieved(expense, expenses)
+
+
+def test_create_expense_raises_storage_exception_when_payer_not_found(
+        db_storage_with_sample_data):
+    """Test create_expense raises StorageException when payer doesn't exist"""
+    storage = db_storage_with_sample_data
+
+    # Database foreign key constraint should catch this
+    with pytest.raises(StorageException) as exc_info:
+        storage.create_expense(
+            group_id=1,
+            description="Test expense",
+            amount=50.00,
+            expense_date="2025-01-15",
+            paid_by_user_id=999,
+            participant_user_ids=[999]
+        )
+    assert "Database error creating expense" in str(exc_info.value)
+
+
+def test_create_expense_raises_storage_exception_on_database_error(error_storage):
+    """Test create_expense raises StorageException when database error occurs"""
+    storage = error_storage
+
+    # Mock get_user_by_id to return a user so we get past that check
+    storage.get_user_by_id = MagicMock(
+        return_value={"id": 1, "email": "test@example.com", "name": "Test User"}
+    )
+
+    with pytest.raises(StorageException) as exc_info:
+        storage.create_expense(
+            group_id=1,
+            description="Test expense",
+            amount=50.00,
+            expense_date="2025-01-15",
+            paid_by_user_id=1,
+            participant_user_ids=[1]
+        )
+    assert "Database error creating expense" in str(exc_info.value)

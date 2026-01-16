@@ -23,3 +23,7 @@ class ConflictError(Exception):
 
 class StorageException(Exception):
     """Raised when a database storage operation fails"""
+
+
+class ValidationError(Exception):
+    """Raised when validation fails in the application layer"""

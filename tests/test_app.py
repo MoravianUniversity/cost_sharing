@@ -1101,3 +1101,402 @@ def test_get_group_expenses_with_many_participants(api_client, oauth_handler):
     textbooks_expense = [e for e in data['expenses'] if e['description'] == 'Textbooks'][0]
     assert len(textbooks_expense['splitBetween']) == 5
     assert textbooks_expense['perPersonAmount'] is not None
+
+
+# ============================================================================
+# POST /groups/{groupId}/expenses Tests
+# ============================================================================
+
+def test_create_expense_success(api_client, oauth_handler):
+    """Test successful expense creation - User 1 (Alice) creating expense in group 2."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'New expense',
+            'amount': 50.00,
+            'date': '2025-02-01',
+            'splitBetween': [1, 3]
+        }
+    )
+
+    data = assert_json_response(response, expected_status=201)
+    assert data['description'] == 'New expense'
+    assert data['amount'] == 50.00
+    assert data['date'] == '2025-02-01'
+    assert data['paidBy']['id'] == 1
+    assert len(data['splitBetween']) == 2
+    assert data['perPersonAmount'] == 25.00
+
+
+def test_create_expense_missing_header(api_client):
+    """Test POST /groups/{groupId}/expenses without Authorization header."""
+    response = api_client.post(
+        '/groups/2/expenses',
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_create_expense_invalid_token(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses with invalid token."""
+    oauth_handler.validate_token_raises(TokenInvalidError("Invalid token"))
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer invalid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_create_expense_missing_description(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses with missing description."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_validation_error_response(response, 'description is required')
+
+
+def test_create_expense_empty_description(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses with empty description."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': '',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_validation_error_response(response, 'description must be at least 1 character')
+
+
+def test_create_expense_description_too_long(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses with description too long."""
+    oauth_handler.validate_token_returns(1)
+
+    long_description = 'a' * 201
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': long_description,
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_validation_error_response(response, 'description must be at most 200 characters')
+
+
+def test_create_expense_missing_amount(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses with missing amount."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_validation_error_response(response, 'amount is required')
+
+
+def test_create_expense_invalid_amount_too_small(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses with amount too small."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 0.00,
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_validation_error_response(response, 'amount must be at least 0.01')
+
+
+def test_create_expense_invalid_amount_not_number(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses with amount that is not a number."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 'not a number',
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_validation_error_response(response, 'amount must be a number')
+
+
+def test_create_expense_missing_date(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses with missing date."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'splitBetween': [1]
+        }
+    )
+
+    assert_validation_error_response(response, 'date is required')
+
+
+def test_create_expense_invalid_date_format(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses with invalid date format."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '01/15/2025',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_validation_error_response(response, 'date must be in ISO 8601 format (YYYY-MM-DD)')
+
+
+def test_create_expense_missing_split_between(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses with missing splitBetween."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15'
+        }
+    )
+
+    assert_validation_error_response(response, 'splitBetween is required')
+
+
+def test_create_expense_empty_split_between(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses with empty splitBetween array."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': []
+        }
+    )
+
+    assert_validation_error_response(response, 'splitBetween must contain at least one user ID')
+
+
+def test_create_expense_split_between_not_array(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses when splitBetween is not an array."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': 'not an array'
+        }
+    )
+
+    assert_validation_error_response(response, 'splitBetween must be an array')
+
+
+def test_create_expense_split_between_invalid_user_id_type(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses when splitBetween contains non-integer."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [1, 'not an integer', 3]
+        }
+    )
+
+    assert_validation_error_response(response,
+        'splitBetween must contain only user IDs (integers)')
+
+
+def test_create_expense_user_not_in_split_between(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses when user is not in splitBetween."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [3]  # Only Charlie, not Alice (user 1)
+        }
+    )
+
+    assert_validation_error_response(response,
+        'splitBetween must include the authenticated user\'s ID')
+
+
+def test_create_expense_user_not_in_group(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses when participant is not a group member."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [1, 2]  # Bob (user 2) is not a member of group 2
+        }
+    )
+
+    assert_validation_error_response(response,
+        'All users in splitBetween must be members of the group')
+
+
+def test_create_expense_group_not_found(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses when group doesn't exist."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/999/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [1]
+        }
+    )
+
+    assert_error_response(response, 404, "Resource not found", "Group not found")
+
+
+def test_create_expense_forbidden(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses when user is not a member."""
+    # User 2 (Bob) is NOT a member of group 2 (roommates)
+    oauth_handler.validate_token_returns(2)
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 50.00,
+            'date': '2025-01-15',
+            'splitBetween': [2]
+        }
+    )
+
+    assert_error_response(response, 403, "Forbidden", "Access denied")
+
+
+def test_create_expense_response_structure(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses response has correct structure."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'},
+        json={
+            'description': 'Test expense',
+            'amount': 75.50,
+            'date': '2025-02-05',
+            'splitBetween': [1, 3, 4]
+        }
+    )
+
+    data = assert_json_response(response, expected_status=201)
+    assert 'id' in data
+    assert 'groupId' in data
+    assert 'description' in data
+    assert 'amount' in data
+    assert 'date' in data
+    assert 'paidBy' in data
+    assert 'splitBetween' in data
+    assert 'perPersonAmount' in data
+
+    assert data['description'] == 'Test expense'
+    assert data['amount'] == 75.50
+    assert data['date'] == '2025-02-05'
+    assert data['paidBy']['id'] == 1
+    assert len(data['splitBetween']) == 3
+    assert data['perPersonAmount'] == 25.17  # 75.50 / 3 rounded
+
+
+def test_create_expense_invalid_json(api_client, oauth_handler):
+    """Test POST /groups/{groupId}/expenses with invalid JSON."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.post(
+        '/groups/2/expenses',
+        headers={
+            'Authorization': 'Bearer valid-token',
+            'Content-Type': 'application/json'
+        },
+        data='invalid json'
+    )
+
+    assert_validation_error_response(response, 'Invalid JSON')

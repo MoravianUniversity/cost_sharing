@@ -4,7 +4,8 @@ from cost_sharing.exceptions import (
     UserNotFoundError,
     GroupNotFoundError,
     ForbiddenError,
-    ConflictError
+    ConflictError,
+    ValidationError
 )
 
 
@@ -173,3 +174,57 @@ class CostSharing:
             expense.per_person_amount = round(expense.amount / num_participants, 2)
 
         return expenses
+
+    def create_expense(self, group_id, user_id, description, amount, date, split_between):
+        """
+        Create a new expense in a group.
+
+        Args:
+            group_id: Group ID
+            user_id: User ID of the authenticated user (payer)
+            description: Expense description (1-200 characters)
+            amount: Expense amount (>= 0.01)
+            date: Expense date (YYYY-MM-DD format)
+            split_between: List of user IDs to split the expense among
+
+        Returns:
+            Expense object with per_person_amount calculated
+
+        Raises:
+            GroupNotFoundError: If group doesn't exist
+            ForbiddenError: If user is not a member of the group
+            ValidationError: If validation fails (user not in splitBetween, 
+                invalid participants, etc.)
+        """
+        # Verify authorization (raises GroupNotFoundError or ForbiddenError if invalid)
+        group = self.get_group_by_id(group_id, user_id)
+
+        # Validate split_between is not empty
+        if not split_between or len(split_between) == 0:
+            raise ValidationError("splitBetween must contain at least one user ID")
+
+        # Validate user is included in split_between
+        if user_id not in split_between:
+            raise ValidationError("splitBetween must include the authenticated user's ID")
+
+        # Validate all users in split_between are group members
+        member_ids = [member.id for member in group.members]
+        invalid_users = [uid for uid in split_between if uid not in member_ids]
+        if invalid_users:
+            raise ValidationError("All users in splitBetween must be members of the group")
+
+        # Create expense in storage layer
+        expense = self._storage.create_expense(
+            group_id=group_id,
+            description=description,
+            amount=amount,
+            expense_date=date,
+            paid_by_user_id=user_id,
+            participant_user_ids=split_between
+        )
+
+        # Calculate per_person_amount
+        num_participants = len(expense.split_between)
+        expense.per_person_amount = round(expense.amount / num_participants, 2)
+
+        return expense

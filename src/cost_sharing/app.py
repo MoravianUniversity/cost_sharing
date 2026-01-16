@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import datetime
 import functools
 import sqlite3
 from flask import Flask, request, jsonify, g, render_template
@@ -20,7 +21,8 @@ from cost_sharing.validation import (
 from cost_sharing.exceptions import (
     GroupNotFoundError,
     ForbiddenError,
-    ConflictError
+    ConflictError,
+    ValidationError
 )
 
 
@@ -454,6 +456,143 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
                 "error": "Forbidden",
                 "message": "Access denied"
             }), 403
+
+    @app.route('/groups/<int:groupId>/expenses', methods=['POST'])
+    @require_auth
+    def create_expense(groupId):  # pylint: disable=C0103
+        """
+        Create a new expense in a group.
+
+        Requires valid JWT token in Authorization header.
+        The authenticated user is automatically set as the payer.
+        Request body must contain description, amount, date, and splitBetween.
+        Returns 201 with Expense object including calculated perPersonAmount.
+        """
+        # Get user_id from g (set by require_auth decorator)
+        user_id = g.user_id
+
+        # Validate JSON body
+        data, error = validate_json_body(request)
+        if error is not None:
+            return error
+
+        # Validate description
+        description, error = validate_required_string(data, 'description', min_len=1, max_len=200)
+        if error is not None:
+            return error
+
+        # Validate amount
+        amount = data.get('amount')
+        if amount is None:
+            return jsonify({
+                "error": "Validation failed",
+                "message": "amount is required"
+            }), 400
+        try:
+            amount = float(amount)
+        except (ValueError, TypeError):
+            return jsonify({
+                "error": "Validation failed",
+                "message": "amount must be a number"
+            }), 400
+        if amount < 0.01:
+            return jsonify({
+                "error": "Validation failed",
+                "message": "amount must be at least 0.01"
+            }), 400
+
+        # Validate date
+        date, error = validate_required_string(data, 'date')
+        if error is not None:
+            return error
+        # Validate date format (YYYY-MM-DD) using datetime
+        try:
+            datetime.strptime(date, '%Y-%m-%d')
+        except ValueError:
+            return jsonify({
+                "error": "Validation failed",
+                "message": "date must be in ISO 8601 format (YYYY-MM-DD)"
+            }), 400
+
+        # Validate splitBetween
+        split_between = data.get('splitBetween')
+        if split_between is None:
+            return jsonify({
+                "error": "Validation failed",
+                "message": "splitBetween is required"
+            }), 400
+        if not isinstance(split_between, list):
+            return jsonify({
+                "error": "Validation failed",
+                "message": "splitBetween must be an array"
+            }), 400
+        if len(split_between) == 0:
+            return jsonify({
+                "error": "Validation failed",
+                "message": "splitBetween must contain at least one user ID"
+            }), 400
+        # Validate all items are integers
+        try:
+            split_between = [int(uid) for uid in split_between]
+        except (ValueError, TypeError):
+            return jsonify({
+                "error": "Validation failed",
+                "message": "splitBetween must contain only user IDs (integers)"
+            }), 400
+
+        try:
+            expense = application.create_expense(
+                group_id=groupId,
+                user_id=user_id,
+                description=description,
+                amount=amount,
+                date=date,
+                split_between=split_between
+            )
+
+            # Convert Expense object to JSON format with camelCase field names
+            expense_json = {
+                "id": expense.id,
+                "groupId": expense.group_id,
+                "description": expense.description,
+                "amount": expense.amount,
+                "date": expense.date,
+                "paidBy": {
+                    "id": expense.paid_by.id,
+                    "email": expense.paid_by.email,
+                    "name": expense.paid_by.name
+                },
+                "splitBetween": [
+                    {
+                        "id": user.id,
+                        "email": user.email,
+                        "name": user.name
+                    }
+                    for user in expense.split_between
+                ],
+                "perPersonAmount": expense.per_person_amount
+            }
+
+            # Return expense in the format specified by API spec
+            return jsonify(expense_json), 201
+
+        except GroupNotFoundError:
+            return jsonify({
+                "error": "Resource not found",
+                "message": "Group not found"
+            }), 404
+
+        except ForbiddenError:
+            return jsonify({
+                "error": "Forbidden",
+                "message": "Access denied"
+            }), 403
+
+        except ValidationError as e:
+            return jsonify({
+                "error": "Validation failed",
+                "message": str(e)
+            }), 400
 
     return app
 

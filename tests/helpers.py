@@ -387,6 +387,64 @@ def assert_expense_participants(expense, expected_user_ids):
         f"Expected splitBetween user IDs {expected_sorted}, got {actual_user_ids}"
 
 
+def assert_expense_matches_retrieved(created_expense, expenses_list):
+    """
+    Assert that an expense returned from create_expense matches the expense
+    retrieved from get_group_expenses by ID.
+    
+    This verifies that the expense was correctly persisted to the database
+    and can be retrieved.
+    
+    Args:
+        created_expense: Expense object returned from create_expense
+        expenses_list: List of Expense objects from get_group_expenses
+    """
+    # Find the expense in the list by ID
+    matching_expense = None
+    for expense in expenses_list:
+        if expense.id == created_expense.id:
+            matching_expense = expense
+            break
+
+    assert matching_expense is not None, \
+        f"Expense with ID {created_expense.id} not found in retrieved expenses"
+
+    # Verify all fields match
+    assert matching_expense.id == created_expense.id, \
+        f"Expense ID mismatch: {created_expense.id} vs {matching_expense.id}"
+    assert matching_expense.group_id == created_expense.group_id, \
+        f"Group ID mismatch: {created_expense.group_id} vs {matching_expense.group_id}"
+    assert matching_expense.description == created_expense.description, \
+        f"Description mismatch: '{created_expense.description}' vs '{matching_expense.description}'"
+    assert matching_expense.amount == created_expense.amount, \
+        f"Amount mismatch: {created_expense.amount} vs {matching_expense.amount}"
+    assert matching_expense.date == created_expense.date, \
+        f"Date mismatch: '{created_expense.date}' vs '{matching_expense.date}'"
+
+    # Verify paid_by user
+    assert matching_expense.paid_by.id == created_expense.paid_by.id, \
+        (f"Paid by user ID mismatch: {created_expense.paid_by.id} vs "
+         f"{matching_expense.paid_by.id}")
+    assert matching_expense.paid_by.email == created_expense.paid_by.email, \
+        (f"Paid by email mismatch: '{created_expense.paid_by.email}' vs "
+         f"'{matching_expense.paid_by.email}'")
+    assert matching_expense.paid_by.name == created_expense.paid_by.name, \
+        (f"Paid by name mismatch: '{created_expense.paid_by.name}' vs "
+         f"'{matching_expense.paid_by.name}'")
+
+    # Verify split_between participants
+    created_participant_ids = sorted([user.id for user in created_expense.split_between])
+    retrieved_participant_ids = sorted([user.id for user in matching_expense.split_between])
+    assert retrieved_participant_ids == created_participant_ids, \
+        (f"Split between mismatch: {created_participant_ids} vs "
+         f"{retrieved_participant_ids}")
+
+    # Verify per_person_amount (should both be None in storage layer)
+    assert matching_expense.per_person_amount == created_expense.per_person_amount, \
+        (f"Per person amount mismatch: {created_expense.per_person_amount} vs "
+         f"{matching_expense.per_person_amount}")
+
+
 def assert_group_members(group_id, actual_member_ids):
     """
     Assert group members match expected members from sample data.
