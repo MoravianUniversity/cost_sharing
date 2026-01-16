@@ -12,6 +12,7 @@ from cost_sharing.oauth_handler import (
 )
 from cost_sharing.db_storage import DatabaseCostStorage
 from cost_sharing.cost_sharing import CostSharing
+from cost_sharing.models import UserRequest, GroupRequest, ExpenseRequest
 from cost_sharing.validation import (
     validate_json_body,
     validate_required_string,
@@ -123,7 +124,8 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
             name = user_info['name']
 
             # Get or create user in the application
-            user = application.get_or_create_user(email, name)
+            user_request = UserRequest(email=email, name=name)
+            user = application.get_or_create_user(user_request)
 
             # Create JWT token for the user
             token = oauth_handler.create_jwt_token(user.id)
@@ -245,7 +247,12 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
             return error
 
         # Create group
-        group = application.create_group(user_id, name, description)
+        group_request = GroupRequest(
+            name=name,
+            description=description or '',
+            created_by_user_id=user_id
+        )
+        group = application.create_group(group_request)
 
         # Return group in the format specified by API spec
         return jsonify({
@@ -357,7 +364,8 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
 
         try:
             # Add member to group via application layer
-            group = application.add_group_member(groupId, user_id, email, name)
+            user_request = UserRequest(email=email, name=name)
+            group = application.add_group_member(groupId, user_id, user_request)
 
             # Return group in the format specified by API spec
             return jsonify({
@@ -459,7 +467,7 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
 
     @app.route('/groups/<int:groupId>/expenses', methods=['POST'])
     @require_auth
-    def create_expense(groupId):  # pylint: disable=C0103
+    def create_expense(groupId):  # pylint: disable=C0103, R0911, R0912, R0914, R0915
         """
         Create a new expense in a group.
 
@@ -541,14 +549,15 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
             }), 400
 
         try:
-            expense = application.create_expense(
+            expense_request = ExpenseRequest(
                 group_id=groupId,
-                user_id=user_id,
                 description=description,
                 amount=amount,
                 date=date,
-                split_between=split_between
+                paid_by_user_id=user_id,
+                participant_user_ids=split_between
             )
+            expense = application.create_expense(expense_request)
 
             # Convert Expense object to JSON format with camelCase field names
             expense_json = {

@@ -16,6 +16,7 @@ from helpers import (
     assert_group_matches, assert_group_is, assert_group_has_members,
     assert_expenses_are, assert_expense_participants
 )
+from cost_sharing.models import UserRequest, GroupRequest, ExpenseRequest
 from cost_sharing.exceptions import (
     UserNotFoundError, GroupNotFoundError, ForbiddenError, ConflictError,
     ValidationError
@@ -36,20 +37,16 @@ def test_get_user_by_id_raises_exception(app_with_sample_data):
 
 def test_get_or_create_user_returns_existing(app_with_sample_data):
     """Test get_or_create_user - returns existing user when email exists"""
-    user = app_with_sample_data.get_or_create_user(
-        email="alice@school.edu",
-        name="Updated Name"
-    )
+    user_request = UserRequest(email="alice@school.edu", name="Updated Name")
+    user = app_with_sample_data.get_or_create_user(user_request)
     # Should return existing user, not create new one - original name preserved
     assert_user_is(user, "alice")
 
 
 def test_get_or_create_user_returns_new(app_empty_db):
     """Test get_or_create_user - creates and returns new user when email doesn't exist"""
-    user = app_empty_db.get_or_create_user(
-        email="newuser@example.com",
-        name="New User"
-    )
+    user_request = UserRequest(email="newuser@example.com", name="New User")
+    user = app_empty_db.get_or_create_user(user_request)
     assert_user_matches(user, 1, "newuser@example.com", "New User")
 
 
@@ -88,24 +85,34 @@ def test_get_user_groups_returns_correct_members(app_with_sample_data):
 
 def test_create_group_returns_group_with_correct_fields(app_empty_db):
     """Test create_group returns group with correct fields"""
-    user = app_empty_db.get_or_create_user("test@example.com", "Test User")
-    group = app_empty_db.create_group(user.id, "Test Group", "Test description")
+    user_request = UserRequest(email="test@example.com", name="Test User")
+    user = app_empty_db.get_or_create_user(user_request)
+    group_request = GroupRequest(
+        name="Test Group",
+        description="Test description",
+        created_by_user_id=user.id
+    )
+    group = app_empty_db.create_group(group_request)
     assert_group_matches(group, 1, "Test Group", "Test description", user, expected_member_count=1)
     assert_user_matches(group.members[0], user.id, "test@example.com", "Test User")
 
 
 def test_create_group_without_description(app_empty_db):
     """Test create_group works without description"""
-    user = app_empty_db.get_or_create_user("test@example.com", "Test User")
-    group = app_empty_db.create_group(user.id, "Test Group")
+    user_request = UserRequest(email="test@example.com", name="Test User")
+    user = app_empty_db.get_or_create_user(user_request)
+    group_request = GroupRequest(name="Test Group", description="", created_by_user_id=user.id)
+    group = app_empty_db.create_group(group_request)
     assert_group_matches(group, 1, "Test Group", "", user, expected_member_count=1)
     assert_user_matches(group.members[0], user.id, "test@example.com", "Test User")
 
 
 def test_create_group_adds_creator_as_member(app_empty_db):
     """Test create_group adds the creator as a member"""
-    user = app_empty_db.get_or_create_user("test@example.com", "Test User")
-    group = app_empty_db.create_group(user.id, "Test Group")
+    user_request = UserRequest(email="test@example.com", name="Test User")
+    user = app_empty_db.get_or_create_user(user_request)
+    group_request = GroupRequest(name="Test Group", description="", created_by_user_id=user.id)
+    group = app_empty_db.create_group(group_request)
 
     # Verify user is in the group
     user_groups = app_empty_db.get_user_groups(user.id)
@@ -117,7 +124,8 @@ def test_create_group_adds_creator_as_member(app_empty_db):
 def test_create_group_raises_user_not_found_error_for_invalid_user(app_empty_db):
     """Test create_group raises UserNotFoundError when user doesn't exist"""
     with pytest.raises(UserNotFoundError):
-        app_empty_db.create_group(999, "Test Group")
+        group_request = GroupRequest(name="Test Group", description="", created_by_user_id=999)
+        app_empty_db.create_group(group_request)
 
 
 def test_get_group_by_id_returns_group_for_member(app_with_sample_data):
@@ -143,7 +151,8 @@ def test_get_group_by_id_raises_forbidden_error_for_non_member(app_with_sample_d
 def test_get_group_by_id_raises_group_not_found_error_for_invalid_group(app_empty_db):
     """Test get_group_by_id raises GroupNotFoundError when group doesn't exist"""
     app = app_empty_db
-    user = app.get_or_create_user("test@example.com", "Test User")
+    user_request = UserRequest(email="test@example.com", name="Test User")
+    user = app.get_or_create_user(user_request)
 
     with pytest.raises(GroupNotFoundError) as exc_info:
         app.get_group_by_id(999, user.id)
@@ -171,7 +180,8 @@ def test_add_group_member_creator_adds_existing_user(app_with_sample_data):
     # Group 1: creator is user 1 (Alice), members [1, 2] (Alice, Bob)
     # User 3 (Charlie) exists but is not in group 1
     # User 1 (Alice) is the creator, so she can add members
-    group = app.add_group_member(1, 1, "charlie@school.edu", "Charlie")
+    user_request = UserRequest(email="charlie@school.edu", name="Charlie")
+    group = app.add_group_member(1, 1, user_request)
 
     # Verify group now has members [1, 2, 3]
     assert_group_has_members(group, [1, 2, 3])
@@ -184,7 +194,8 @@ def test_add_group_member_creator_adds_new_user(app_with_sample_data):
     # Group 1: creator is user 1 (Alice), members [1, 2] (Alice, Bob)
     # User 1 (Alice) is the creator, so she can add members
     # Add a new user that doesn't exist
-    group = app.add_group_member(1, 1, "newuser@example.com", "New User")
+    user_request = UserRequest(email="newuser@example.com", name="New User")
+    group = app.add_group_member(1, 1, user_request)
 
     # Verify group now has the new member
     member_ids = [member.id for member in group.members]
@@ -207,7 +218,8 @@ def test_add_group_member_non_creator_member_adds_existing_user(app_with_sample_
     # User 1 (Alice) is a member but not the creator
     # User 2 (Bob) exists but is not in group 2
     # User 1 (Alice) can add members even though she's not the creator
-    group = app.add_group_member(2, 1, "bob@school.edu", "Bob")
+    user_request = UserRequest(email="bob@school.edu", name="Bob")
+    group = app.add_group_member(2, 1, user_request)
 
     # Verify group now has members [3, 1, 4, 2]
     assert_group_has_members(group, [3, 1, 4, 2])
@@ -218,7 +230,8 @@ def test_add_group_member_raises_group_not_found_error(app_with_sample_data):
     app = app_with_sample_data
 
     with pytest.raises(GroupNotFoundError) as exc_info:
-        app.add_group_member(999, 1, "charlie@school.edu", "Charlie")
+        user_request = UserRequest(email="charlie@school.edu", name="Charlie")
+        app.add_group_member(999, 1, user_request)
     assert "Group with ID 999 not found" in str(exc_info.value)
 
 
@@ -228,7 +241,8 @@ def test_add_group_member_raises_forbidden_error_for_non_member_caller(app_with_
 
     # User 2 (Bob) is not a member of group 2 (Roommates Spring 2025)
     with pytest.raises(ForbiddenError) as exc_info:
-        app.add_group_member(2, 2, "charlie@school.edu", "Charlie")
+        user_request = UserRequest(email="charlie@school.edu", name="Charlie")
+        app.add_group_member(2, 2, user_request)
     assert "You do not have access to this group" in str(exc_info.value)
 
 
@@ -240,7 +254,8 @@ def test_add_group_member_raises_conflict_error_for_duplicate_member(app_with_sa
     # User 1 (Alice) is a member, so she can add members
     # Try to add Alice (user 1) again
     with pytest.raises(ConflictError) as exc_info:
-        app.add_group_member(2, 1, "alice@school.edu", "Alice")
+        user_request = UserRequest(email="alice@school.edu", name="Alice")
+        app.add_group_member(2, 1, user_request)
     assert "User is already a member of this group" in str(exc_info.value)
 
 
@@ -357,23 +372,24 @@ def test_create_expense_success(app_with_sample_data):
     # Group 1 (weekend_trip) has no expenses, members are [1, 2] (Alice, Bob)
     # User 1 (Alice) creates an expense for herself
 
-    expense = app.create_expense(
+    expense_request = ExpenseRequest(
         group_id=1,
-        user_id=1,
-        description="Gas for trip",
-        amount=50.00,
-        date="2025-03-01",
-        split_between=[1]
+        description="Hotel room",
+        amount=125.50,
+        date="2025-02-15",
+        paid_by_user_id=1,
+        participant_user_ids=[1]
     )
+    expense = app.create_expense(expense_request)
 
     assert expense.group_id == 1
-    assert expense.description == "Gas for trip"
-    assert expense.amount == 50.00
-    assert expense.date == "2025-03-01"
+    assert expense.description == "Hotel room"
+    assert expense.amount == 125.50
+    assert expense.date == "2025-02-15"
     assert_user_is(expense.paid_by, "alice")
     assert len(expense.split_between) == 1
     assert expense.split_between[0].id == 1
-    assert expense.per_person_amount == 50.00
+    assert expense.per_person_amount == 125.50
 
 
 def test_create_expense_with_multiple_participants(app_with_sample_data):
@@ -382,14 +398,15 @@ def test_create_expense_with_multiple_participants(app_with_sample_data):
     # Group 2 (roommates) has members [3, 1, 4] (Charlie, Alice, David)
     # User 3 (Charlie) creates an expense split between all three
 
-    expense = app.create_expense(
+    expense_request = ExpenseRequest(
         group_id=2,
-        user_id=3,
         description="New expense",
         amount=100.00,
         date="2025-02-01",
-        split_between=[3, 1, 4]
+        paid_by_user_id=3,
+        participant_user_ids=[3, 1, 4]
     )
+    expense = app.create_expense(expense_request)
 
     assert expense.amount == 100.00
     assert len(expense.split_between) == 3
@@ -402,14 +419,15 @@ def test_create_expense_calculates_per_person_amount(app_with_sample_data):
     # Group 1 (weekend_trip) has members [1, 2] (Alice, Bob)
     # User 1 (Alice) creates an expense split between both
 
-    expense = app.create_expense(
+    expense_request = ExpenseRequest(
         group_id=1,
-        user_id=1,
         description="Split expense",
         amount=86.40,
         date="2025-03-05",
-        split_between=[1, 2]
+        paid_by_user_id=1,
+        participant_user_ids=[1, 2]
     )
+    expense = app.create_expense(expense_request)
 
     assert expense.per_person_amount == 43.20  # 86.40 / 2
 
@@ -419,14 +437,15 @@ def test_create_expense_raises_group_not_found_error(app_with_sample_data):
     app = app_with_sample_data
 
     with pytest.raises(GroupNotFoundError) as exc_info:
-        app.create_expense(
+        expense_request = ExpenseRequest(
             group_id=999,
-            user_id=1,
-            description="Test expense",
-            amount=50.00,
+            description="Bad expense",
+            amount=10.00,
             date="2025-01-15",
-            split_between=[1]
+            paid_by_user_id=1,
+            participant_user_ids=[1]
         )
+        app.create_expense(expense_request)
     assert "Group with ID 999 not found" in str(exc_info.value)
 
 
@@ -436,14 +455,15 @@ def test_create_expense_raises_forbidden_error_for_non_member(app_with_sample_da
 
     # User 2 (Bob) is not a member of group 2 (roommates)
     with pytest.raises(ForbiddenError) as exc_info:
-        app.create_expense(
+        expense_request = ExpenseRequest(
             group_id=2,
-            user_id=2,
             description="Test expense",
             amount=50.00,
             date="2025-01-15",
-            split_between=[2]
+            paid_by_user_id=2,
+            participant_user_ids=[2]
         )
+        app.create_expense(expense_request)
     assert "You do not have access to this group" in str(exc_info.value)
 
 
@@ -452,14 +472,15 @@ def test_create_expense_raises_validation_error_for_empty_split_between(app_with
     app = app_with_sample_data
 
     with pytest.raises(ValidationError) as exc_info:
-        app.create_expense(
+        expense_request = ExpenseRequest(
             group_id=2,
-            user_id=1,
             description="Test expense",
             amount=50.00,
             date="2025-01-15",
-            split_between=[]
+            paid_by_user_id=1,
+            participant_user_ids=[]
         )
+        app.create_expense(expense_request)
     assert "splitBetween must contain at least one user ID" in str(exc_info.value)
 
 
@@ -469,14 +490,15 @@ def test_create_expense_raises_validation_error_user_not_in_split_between(app_wi
 
     # User 1 (Alice) is a member of group 2, but try to create expense without including her
     with pytest.raises(ValidationError) as exc_info:
-        app.create_expense(
+        expense_request = ExpenseRequest(
             group_id=2,
-            user_id=1,
             description="Test expense",
             amount=50.00,
             date="2025-01-15",
-            split_between=[3]  # Only Charlie, not Alice
+            paid_by_user_id=1,
+            participant_user_ids=[3]  # Only Charlie, not Alice
         )
+        app.create_expense(expense_request)
     assert "splitBetween must include the authenticated user's ID" in str(exc_info.value)
 
 
@@ -486,12 +508,13 @@ def test_create_expense_raises_validation_error_invalid_participant(app_with_sam
 
     # User 1 (Alice) is a member of group 2, but user 2 (Bob) is not
     with pytest.raises(ValidationError) as exc_info:
-        app.create_expense(
+        expense_request = ExpenseRequest(
             group_id=2,
-            user_id=1,
             description="Test expense",
             amount=50.00,
             date="2025-01-15",
-            split_between=[1, 2]  # Bob is not a member of group 2
+            paid_by_user_id=1,
+            participant_user_ids=[1, 2]  # Bob is not a member of group 2
         )
+        app.create_expense(expense_request)
     assert "All users in splitBetween must be members of the group" in str(exc_info.value)

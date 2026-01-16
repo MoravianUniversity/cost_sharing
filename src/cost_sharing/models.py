@@ -36,3 +36,29 @@ class Expense:  # pylint: disable=R0902
     paid_by: User
     split_between: List[User]
     per_person_amount: float = None
+
+
+@dataclass
+class UserRequest:
+    """Request Data Transfer Object for creating a new user"""
+    email: str
+    name: str
+
+
+@dataclass
+class GroupRequest:
+    """Request Data Transfer Object for creating a new group"""
+    name: str
+    description: str
+    created_by_user_id: int
+
+
+@dataclass
+class ExpenseRequest:
+    """Request Data Transfer Object for creating a new expense"""
+    group_id: int
+    description: str
+    amount: float
+    date: str
+    paid_by_user_id: int
+    participant_user_ids: List[int]
