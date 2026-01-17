@@ -815,6 +815,50 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
                 "message": str(e)
             }), 400
 
+    @app.route('/groups/<int:groupId>/expenses/<int:expenseId>', methods=['DELETE'])
+    @require_auth
+    def delete_expense(groupId, expenseId):  # pylint: disable=C0103, R0911
+        """
+        Delete an expense from a group.
+
+        Requires valid JWT token in Authorization header.
+        The authenticated user must be the person who paid for the expense.
+        Returns 204 No Content on successful deletion.
+        """
+        # Get user_id from g (set by require_auth decorator)
+        user_id = g.user_id
+
+        try:
+            # Delete expense from application layer (includes all authorization checks)
+            application.delete_expense(expenseId, groupId, user_id)
+
+            # Return 204 No Content (no response body)
+            return '', 204
+
+        except ExpenseNotFoundError:
+            return jsonify({
+                "error": "Resource not found",
+                "message": "Expense not found"
+            }), 404
+
+        except GroupNotFoundError:
+            return jsonify({
+                "error": "Resource not found",
+                "message": "Group not found"
+            }), 404
+
+        except ForbiddenError as e:
+            # Check if it's the payer authorization error
+            if "Only the person who paid" in str(e):
+                return jsonify({
+                    "error": "Forbidden",
+                    "message": "Only the person who paid for this expense can delete it"
+                }), 403
+            return jsonify({
+                "error": "Forbidden",
+                "message": "Access denied"
+            }), 403
+
     return app
 
 

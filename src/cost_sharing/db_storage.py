@@ -546,3 +546,26 @@ class DatabaseCostStorage: # pylint: disable=R0904
         except sqlite3.Error as e:
             self._conn.rollback()
             raise StorageException(f"Database error updating expense: {e}") from e
+
+    def delete_expense(self, expense_id):
+        """
+        Delete an expense by ID.
+
+        The expense_participants records will be automatically deleted
+        via CASCADE foreign key constraint.
+
+        Args:
+            expense_id: Expense ID to delete
+
+        Raises:
+            StorageException: If a database error occurs
+        """
+        try:
+            self._conn.execute(
+                'DELETE FROM expenses WHERE id = ?',
+                (expense_id,)
+            )
+            self._conn.commit()
+        except sqlite3.Error as e:
+            self._conn.rollback()
+            raise StorageException(f"Database error deleting expense: {e}") from e

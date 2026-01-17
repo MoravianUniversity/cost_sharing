@@ -1351,7 +1351,157 @@ function submitEditExpense(event) {
 }
 
 function handleDeleteExpense(expenseId, groupId) {
-    alert('Delete expense functionality not yet implemented');
+    if (!currentToken) {
+        showError('You must be logged in to delete an expense');
+        return;
+    }
+    // Fetch expense details to show in confirmation dialog
+    fetchExpenseDetailsForDelete(expenseId, groupId);
+}
+
+function fetchExpenseDetailsForDelete(expenseId, groupId) {
+    fetch(`${API_BASE}/groups/${groupId}/expenses/${expenseId}`, {
+        headers: {
+            'Authorization': `Bearer ${currentToken}`
+        }
+    })
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 401) {
+                    logout();
+                    throw new Error('Authentication failed');
+                }
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Failed to fetch expense details');
+                });
+            }
+            return response.json();
+        })
+        .then(expense => {
+            showDeleteExpenseConfirmationModal(expense);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError(error.message || 'Failed to fetch expense details');
+        });
+}
+
+function showDeleteExpenseConfirmationModal(expense) {
+    // Create modal if it doesn't exist
+    let modalOverlay = document.getElementById('delete-expense-modal');
+    if (!modalOverlay) {
+        modalOverlay = document.createElement('div');
+        modalOverlay.id = 'delete-expense-modal';
+        modalOverlay.className = 'modal-overlay';
+        modalOverlay.innerHTML = `
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>Delete Expense</h2>
+                    <button class="modal-close" onclick="closeDeleteExpenseModal()">&times;</button>
+                </div>
+                <p>Are you sure you want to delete this expense?</p>
+                <p style="font-weight: 600; color: #333; margin: 10px 0;">"<span id="delete-expense-description"></span>"</p>
+                <p style="color: #6c757d; font-size: 0.9em;">This action cannot be undone.</p>
+                <div class="form-actions">
+                    <button type="button" class="secondary" onclick="closeDeleteExpenseModal()">Cancel</button>
+                    <button type="button" class="danger" id="confirm-delete-expense-btn" onclick="confirmDeleteExpense()">Delete</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modalOverlay);
+        
+        // Close modal when clicking outside
+        modalOverlay.addEventListener('click', function(event) {
+            if (event.target === modalOverlay) {
+                closeDeleteExpenseModal();
+            }
+        });
+    }
+
+    // Update expense description in modal
+    const descriptionEl = document.getElementById('delete-expense-description');
+    if (descriptionEl) {
+        descriptionEl.textContent = expense.description || '';
+    }
+
+    // Store expense ID and group ID for deletion
+    modalOverlay.dataset.expenseId = expense.id;
+    modalOverlay.dataset.groupId = expense.groupId;
+
+    modalOverlay.classList.add('active');
+}
+
+function closeDeleteExpenseModal() {
+    const modalOverlay = document.getElementById('delete-expense-modal');
+    if (modalOverlay) {
+        modalOverlay.classList.remove('active');
+    }
+}
+
+function confirmDeleteExpense() {
+    const modalOverlay = document.getElementById('delete-expense-modal');
+    if (!modalOverlay) {
+        return;
+    }
+
+    const expenseId = modalOverlay.dataset.expenseId;
+    const groupId = modalOverlay.dataset.groupId;
+
+    if (!expenseId || !groupId) {
+        showError('Expense information not available');
+        return;
+    }
+
+    if (!currentToken) {
+        showError('You must be logged in to delete an expense');
+        closeDeleteExpenseModal();
+        return;
+    }
+
+    // Disable delete button during submission
+    const deleteButton = document.getElementById('confirm-delete-expense-btn');
+    const originalText = deleteButton.textContent;
+    deleteButton.disabled = true;
+    deleteButton.textContent = 'Deleting...';
+
+    fetch(`${API_BASE}/groups/${groupId}/expenses/${expenseId}`, {
+        method: 'DELETE',
+        headers: {
+            'Authorization': `Bearer ${currentToken}`
+        }
+    })
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 401) {
+                    logout();
+                    throw new Error('Authentication failed');
+                }
+                if (response.status === 403) {
+                    throw new Error('You do not have permission to delete this expense');
+                }
+                if (response.status === 404) {
+                    throw new Error('Expense not found');
+                }
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Failed to delete expense');
+                });
+            }
+            // DELETE returns 204 No Content, so no JSON to parse
+            return null;
+        })
+        .then(() => {
+            closeDeleteExpenseModal();
+            // Reload expenses data
+            fetchGroupExpenses(groupId);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError(error.message || 'Failed to delete expense');
+        })
+        .finally(() => {
+            deleteButton.disabled = false;
+            deleteButton.textContent = originalText;
+        });
 }
 
 function escapeHtml(text) {

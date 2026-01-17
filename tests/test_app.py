@@ -2116,3 +2116,147 @@ def test_update_expense_split_between_invalid_user_id_type(api_client, oauth_han
     assert_validation_error_response(
         response, 'splitBetween must contain only integers'
     )
+
+
+# ============================================================================
+# DELETE /groups/{groupId}/expenses/{expenseId} Tests
+# ============================================================================
+
+def test_delete_expense_success(api_client, oauth_handler):
+    """Test successful expense deletion - User 1 (Alice) deleting expense 2."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.delete(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert response.status_code == 204
+    assert response.data == b''
+
+    # Verify expense was deleted by trying to retrieve it
+    oauth_handler.validate_token_returns(1)
+    get_response = api_client.get(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+    assert get_response.status_code == 404
+
+
+def test_delete_expense_removes_from_group_expenses(api_client, oauth_handler):
+    """Test that deleted expense is removed from group expenses list."""
+    oauth_handler.validate_token_returns(1)
+
+    # Delete expense 2
+    response = api_client.delete(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+    assert response.status_code == 204
+
+    # Verify expense 2 is not in group expenses list
+    oauth_handler.validate_token_returns(1)
+    get_response = api_client.get(
+        '/groups/2/expenses',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+    data = assert_json_response(get_response, expected_status=200)
+    expense_ids = [e['id'] for e in data['expenses']]
+    assert 2 not in expense_ids
+
+
+def test_delete_expense_missing_header(api_client):
+    """Test DELETE /groups/{groupId}/expenses/{expenseId} without Authorization header."""
+    response = api_client.delete('/groups/2/expenses/2')
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_delete_expense_invalid_token(api_client, oauth_handler):
+    """Test DELETE /groups/{groupId}/expenses/{expenseId} with invalid token."""
+    oauth_handler.validate_token_raises(TokenInvalidError("Invalid token"))
+
+    response = api_client.delete(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer invalid-token'}
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_delete_expense_expired_token(api_client, oauth_handler):
+    """Test DELETE /groups/{groupId}/expenses/{expenseId} with expired token."""
+    oauth_handler.validate_token_raises(TokenExpiredError("Token expired"))
+
+    response = api_client.delete(
+        '/groups/2/expenses/2',
+        headers={'Authorization': 'Bearer expired-token'}
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_delete_expense_not_found(api_client, oauth_handler):
+    """Test DELETE /groups/{groupId}/expenses/{expenseId} when expense doesn't exist."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.delete(
+        '/groups/2/expenses/999',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 404, "Resource not found", "Expense not found")
+
+
+def test_delete_expense_group_not_found(api_client, oauth_handler):
+    """Test DELETE /groups/{groupId}/expenses/{expenseId} when group doesn't exist."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.delete(
+        '/groups/999/expenses/1',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 404, "Resource not found", "Group not found")
+
+
+def test_delete_expense_forbidden_not_payer(api_client, oauth_handler):
+    """Test DELETE /groups/{groupId}/expenses/{expenseId} when user is not the payer."""
+    # User 1 (Alice) tries to delete expense 1 (grocery_shopping)
+    # which was paid by user 3 (Charlie)
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.delete(
+        '/groups/2/expenses/1',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 403, "Forbidden",
+        "Only the person who paid for this expense can delete it")
+
+
+def test_delete_expense_forbidden_not_member(api_client, oauth_handler):
+    """Test DELETE /groups/{groupId}/expenses/{expenseId} when user is not a member."""
+    # User 2 (Bob) is NOT a member of group 2
+    oauth_handler.validate_token_returns(2)
+
+    response = api_client.delete(
+        '/groups/2/expenses/1',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 403, "Forbidden", "Access denied")
+
+
+def test_delete_expense_expense_not_in_group(api_client, oauth_handler):
+    """Test DELETE  when expense belongs to different group."""
+    # Expense 1 belongs to group 2, but we're trying to delete from group 1
+    # User 1 (Alice) is a member of both groups
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.delete(
+        '/groups/1/expenses/1',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 404, "Resource not found", "Expense not found")
