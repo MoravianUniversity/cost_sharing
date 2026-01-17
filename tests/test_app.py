@@ -2405,3 +2405,121 @@ def test_delete_expense_expense_not_in_group(api_client, oauth_handler):
     )
 
     assert_error_response(response, 404, "Resource not found", "Expense not found")
+
+
+# ============================================================================
+# DELETE /groups/{groupId} Tests
+# ============================================================================
+
+def test_delete_group_success(api_client, oauth_handler):
+    """Test successful group deletion - User 1 (Alice) deleting group 1."""
+    # Group 1 (weekend_trip) has no expenses and user 1 (Alice) is a member
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.delete(
+        '/groups/1',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert response.status_code == 204
+    assert response.data == b''
+
+    # Verify group was deleted by trying to retrieve it
+    oauth_handler.validate_token_returns(1)
+    get_response = api_client.get(
+        '/groups/1',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+    assert get_response.status_code == 404
+
+
+def test_delete_group_removes_from_user_groups(api_client, oauth_handler):
+    """Test that deleted group is removed from user's groups list."""
+    oauth_handler.validate_token_returns(1)
+
+    # Delete group 1
+    response = api_client.delete(
+        '/groups/1',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+    assert response.status_code == 204
+
+    # Verify group 1 is not in user's groups list
+    oauth_handler.validate_token_returns(1)
+    get_response = api_client.get(
+        '/groups',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+    data = assert_json_response(get_response, expected_status=200)
+    group_ids = [g['id'] for g in data['groups']]
+    assert 1 not in group_ids
+
+
+def test_delete_group_missing_header(api_client):
+    """Test DELETE /groups/{groupId} without Authorization header."""
+    response = api_client.delete('/groups/1')
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_delete_group_invalid_token(api_client, oauth_handler):
+    """Test DELETE /groups/{groupId} with invalid token."""
+    oauth_handler.validate_token_raises(TokenInvalidError("Invalid token"))
+
+    response = api_client.delete(
+        '/groups/1',
+        headers={'Authorization': 'Bearer invalid-token'}
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_delete_group_expired_token(api_client, oauth_handler):
+    """Test DELETE /groups/{groupId} with expired token."""
+    oauth_handler.validate_token_raises(TokenExpiredError("Token expired"))
+
+    response = api_client.delete(
+        '/groups/1',
+        headers={'Authorization': 'Bearer expired-token'}
+    )
+
+    assert_error_response(response, 401, "Unauthorized", "Authentication required")
+
+
+def test_delete_group_not_found(api_client, oauth_handler):
+    """Test DELETE /groups/{groupId} when group doesn't exist."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.delete(
+        '/groups/999',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 404, "Resource not found", "Group not found")
+
+
+def test_delete_group_forbidden_not_member(api_client, oauth_handler):
+    """Test DELETE /groups/{groupId} when user is not a member."""
+    # User 3 (Charlie) is NOT a member of group 1
+    oauth_handler.validate_token_returns(3)
+
+    response = api_client.delete(
+        '/groups/1',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 403, "Forbidden", "Access denied")
+
+
+def test_delete_group_conflict_has_expenses(api_client, oauth_handler):
+    """Test DELETE /groups/{groupId} when group has expenses."""
+    # Group 2 (roommates) has expenses
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.delete(
+        '/groups/2',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 409, "Conflict",
+                         "Cannot delete group with existing expenses")

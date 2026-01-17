@@ -324,6 +324,46 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
                 "message": "Access denied"
             }), 403
 
+    @app.route('/groups/<int:groupId>', methods=['DELETE'])
+    @require_auth
+    def delete_group(groupId):  # pylint: disable=C0103, R0911
+        """
+        Delete a group (only if no expenses exist).
+
+        Requires valid JWT token in Authorization header.
+        Caller must be a member of the group.
+        Group can only be deleted if it has no expenses.
+        Returns 204 No Content on successful deletion.
+        """
+        # Get user_id from g (set by require_auth decorator)
+        user_id = g.user_id
+
+        try:
+            # Delete group from application layer (includes all authorization
+            # checks and expense validation)
+            application.delete_group(groupId, user_id)
+
+            # Return 204 No Content (no response body)
+            return '', 204
+
+        except GroupNotFoundError:
+            return jsonify({
+                "error": "Resource not found",
+                "message": "Group not found"
+            }), 404
+
+        except ForbiddenError:
+            return jsonify({
+                "error": "Forbidden",
+                "message": "Access denied"
+            }), 403
+
+        except ConflictError as e:
+            return jsonify({
+                "error": "Conflict",
+                "message": str(e)
+            }), 409
+
     @app.route('/groups/<int:groupId>/members', methods=['POST'])
     @require_auth
     def add_group_member(groupId):  # pylint: disable=C0103, R0911, R0912
