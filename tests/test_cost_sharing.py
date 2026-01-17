@@ -650,3 +650,86 @@ def test_update_expense_raises_validation_error_invalid_participant(
     with pytest.raises(ValidationError) as exc_info:
         app.update_expense(2, 2, 1, expense_request)
     assert "All users in splitBetween must be members of the group" in str(exc_info.value)
+
+
+# ============================================================================
+# delete_expense Tests
+# ============================================================================
+
+def test_delete_expense_succeeds(app_with_sample_data):
+    """Test delete_expense successfully deletes expense when user is payer"""
+    app = app_with_sample_data
+    # User 1 (Alice) paid for expense 2 (utilities_bill)
+
+    app.delete_expense(2, 2, 1)
+
+    # Verify expense was deleted by trying to retrieve it
+    with pytest.raises(ExpenseNotFoundError,
+                      match="Expense with ID 2 not found"):
+        app.get_expense_by_id(2, 2, 1)
+
+
+def test_delete_expense_removes_expense_from_group_expenses(app_with_sample_data):
+    """Test delete_expense removes expense from group expenses list"""
+    app = app_with_sample_data
+    # User 3 (Charlie) paid for expense 1 (grocery_shopping)
+
+    app.delete_expense(1, 2, 3)
+
+    # Verify expense is no longer in group expenses
+    expenses = app.get_group_expenses(2, 1)
+    expense_ids = [e.id for e in expenses]
+    assert 1 not in expense_ids
+
+
+def test_delete_expense_raises_forbidden_error_when_not_payer(
+        app_with_sample_data):
+    """Test delete_expense raises ForbiddenError when user is not the payer"""
+    app = app_with_sample_data
+    # User 1 (Alice) tries to delete expense 1 (grocery_shopping)
+    # which was paid by user 3 (Charlie)
+
+    with pytest.raises(ForbiddenError,
+                      match="Only the person who paid for this expense"):
+        app.delete_expense(1, 2, 1)
+
+
+def test_delete_expense_raises_group_not_found_error(app_with_sample_data):
+    """Test delete_expense raises GroupNotFoundError for invalid group"""
+    app = app_with_sample_data
+
+    with pytest.raises(GroupNotFoundError,
+                      match="Group with ID 999 not found"):
+        app.delete_expense(1, 999, 3)
+
+
+def test_delete_expense_raises_forbidden_error_for_non_member(
+        app_with_sample_data):
+    """Test delete_expense raises ForbiddenError for non-member"""
+    app = app_with_sample_data
+    # User 2 (Bob) is NOT a member of group 2
+
+    with pytest.raises(ForbiddenError, match="You do not have access"):
+        app.delete_expense(1, 2, 2)
+
+
+def test_delete_expense_raises_expense_not_found_error(app_with_sample_data):
+    """Test delete_expense raises ExpenseNotFoundError for invalid expense"""
+    app = app_with_sample_data
+
+    with pytest.raises(ExpenseNotFoundError,
+                      match="Expense with ID 999 not found"):
+        app.delete_expense(999, 2, 1)
+
+
+def test_delete_expense_raises_error_when_expense_not_in_group(
+        app_with_sample_data):
+    """Test delete_expense raises ExpenseNotFoundError when expense
+    belongs to different group"""
+    app = app_with_sample_data
+    # Expense 1 (grocery_shopping) belongs to group 2, but we're deleting with group_id=1
+    # User 1 (Alice) is a member of both group 1 and group 2
+
+    with pytest.raises(ExpenseNotFoundError,
+                      match="Expense with ID 1 not found"):
+        app.delete_expense(1, 1, 1)

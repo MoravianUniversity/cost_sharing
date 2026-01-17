@@ -634,3 +634,51 @@ def test_update_expense_raises_storage_exception_on_database_error(error_storage
     with pytest.raises(StorageException,
                       match="Database error updating expense"):
         error_storage.update_expense(1, expense_request)
+
+
+# ============================================================================
+# delete_expense Tests
+# ============================================================================
+
+def test_delete_expense_removes_expense_from_group(db_storage_with_sample_data):
+    """Test delete_expense successfully removes expense from group"""
+    storage = db_storage_with_sample_data
+    # Expense 1 (grocery_shopping) is in group 2 (roommates)
+
+    storage.delete_expense(1)
+
+    # Verify expense was deleted by trying to retrieve it
+    deleted_expense = storage.get_expense_by_id(1)
+    assert deleted_expense is None
+
+    # Verify it's gone from group expenses list
+    expenses = storage.get_group_expenses(2)
+    expense_ids = [e.id for e in expenses]
+    assert 1 not in expense_ids
+
+
+def test_delete_expense_from_group_with_multiple_expenses(db_storage_with_sample_data):
+    """Test delete_expense removes one expense while leaving others intact"""
+    storage = db_storage_with_sample_data
+    # Group 2 (roommates) has expenses 1, 2, 3, 4
+
+    storage.delete_expense(3)
+
+    # Verify expense 3 was deleted
+    deleted_expense = storage.get_expense_by_id(3)
+    assert deleted_expense is None
+
+    # Verify other expenses (1, 2, 4) still exist
+    expenses = storage.get_group_expenses(2)
+    expense_ids = [e.id for e in expenses]
+    assert 1 in expense_ids
+    assert 2 in expense_ids
+    assert 3 not in expense_ids
+    assert 4 in expense_ids
+
+
+def test_delete_expense_raises_storage_exception_on_database_error(error_storage):
+    """Test delete_expense raises StorageException on database error"""
+    with pytest.raises(StorageException,
+                      match="Database error deleting expense"):
+        error_storage.delete_expense(1)

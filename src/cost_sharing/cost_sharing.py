@@ -10,7 +10,7 @@ from cost_sharing.exceptions import (
 )
 
 
-class CostSharing:
+class CostSharing: # pylint: disable=R0904
     """Application layer for Cost Sharing system."""
 
     def __init__(self, storage):
@@ -334,3 +334,39 @@ class CostSharing:
         self._calculate_per_person_amount(updated_expense)
 
         return updated_expense
+
+    def delete_expense(self, expense_id, group_id, user_id):
+        """
+        Delete an expense from a group.
+
+        Args:
+            expense_id: Expense ID to delete
+            group_id: Group ID
+            user_id: User ID of the requesting user (must be the payer)
+
+        Raises:
+            ExpenseNotFoundError: If expense doesn't exist or doesn't belong to group
+            GroupNotFoundError: If group doesn't exist
+            ForbiddenError: If user is not a member of the group or not the payer
+        """
+        # Verify authorization (raises GroupNotFoundError or ForbiddenError if invalid)
+        self.get_group_by_id(group_id, user_id)
+
+        # Get existing expense
+        existing_expense = self._storage.get_expense_by_id(expense_id)
+
+        if existing_expense is None:
+            raise ExpenseNotFoundError(f"Expense with ID {expense_id} not found")
+
+        # Verify expense belongs to the group
+        if existing_expense.group_id != group_id:
+            raise ExpenseNotFoundError(f"Expense with ID {expense_id} not found")
+
+        # Verify user is the payer (authorization check)
+        if existing_expense.paid_by.id != user_id:
+            raise ForbiddenError(
+                "Only the person who paid for this expense can delete it"
+            )
+
+        # Delete expense in storage layer
+        self._storage.delete_expense(expense_id)
