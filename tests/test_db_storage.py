@@ -391,6 +391,39 @@ def test_delete_group_member_fails_on_database_error(error_storage):
 
 
 # ============================================================================
+# delete_group Tests
+# ============================================================================
+
+def test_delete_group_removes_group_from_database(db_storage_with_sample_data):
+    """Test delete_group successfully removes group from database"""
+    storage = db_storage_with_sample_data
+    # Group 1 (weekend_trip) has no expenses
+
+    storage.delete_group(1)
+
+    # Verify group was deleted
+    deleted_group = storage.get_group_by_id(1)
+    assert deleted_group is None
+
+
+def test_delete_group_succeeds_when_group_not_found(db_storage_with_sample_data):
+    """Test delete_group succeeds even when group doesn't exist (DELETE affects 0 rows)"""
+    storage = db_storage_with_sample_data
+
+    # Try to delete non-existent group
+    storage.delete_group(999)
+
+
+def test_delete_group_raises_storage_exception_on_database_error(error_storage):
+    """Test delete_group raises StorageException on database error"""
+    storage = error_storage
+
+    with pytest.raises(StorageException) as exc_info:
+        storage.delete_group(1)
+    assert "Database error deleting group" in str(exc_info.value)
+
+
+# ============================================================================
 # get_group_expenses Tests
 # ============================================================================
 

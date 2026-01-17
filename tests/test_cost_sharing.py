@@ -847,3 +847,48 @@ def test_delete_expense_raises_error_when_expense_not_in_group(
     with pytest.raises(ExpenseNotFoundError,
                       match="Expense with ID 1 not found"):
         app.delete_expense(1, 1, 1)
+
+
+# ============================================================================
+# delete_group Tests
+# ============================================================================
+
+def test_delete_group_succeeds(app_with_sample_data):
+    """Test delete_group successfully deletes group when no expenses exist"""
+    app = app_with_sample_data
+    # Group 1 (weekend_trip) has no expenses and user 1 (Alice) is a member
+
+    app.delete_group(1, 1)
+
+    # Verify group was deleted by trying to retrieve it
+    with pytest.raises(GroupNotFoundError,
+                      match="Group with ID 1 not found"):
+        app.get_group_by_id(1, 1)
+
+
+def test_delete_group_raises_conflict_error_when_expenses_exist(app_with_sample_data):
+    """Test delete_group raises ConflictError when group has expenses"""
+    app = app_with_sample_data
+    # Group 2 (roommates) has expenses
+
+    with pytest.raises(ConflictError,
+                      match="Cannot delete group with existing expenses"):
+        app.delete_group(2, 1)
+
+
+def test_delete_group_raises_group_not_found_error(app_with_sample_data):
+    """Test delete_group raises GroupNotFoundError for invalid group"""
+    app = app_with_sample_data
+
+    with pytest.raises(GroupNotFoundError,
+                      match="Group with ID 999 not found"):
+        app.delete_group(999, 1)
+
+
+def test_delete_group_raises_forbidden_error_for_non_member(app_with_sample_data):
+    """Test delete_group raises ForbiddenError for non-member"""
+    app = app_with_sample_data
+    # User 3 (Charlie) is NOT a member of group 1
+
+    with pytest.raises(ForbiddenError, match="You do not have access"):
+        app.delete_group(1, 3)

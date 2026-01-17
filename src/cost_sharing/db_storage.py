@@ -327,6 +327,29 @@ class DatabaseCostStorage: # pylint: disable=R0904
             self._conn.rollback()
             raise StorageException(f"Database error deleting member: {e}") from e
 
+    def delete_group(self, group_id):
+        """
+        Delete a group by ID.
+
+        The group_members records will be automatically deleted
+        via CASCADE foreign key constraint.
+
+        Args:
+            group_id: Group ID to delete
+
+        Raises:
+            StorageException: If a database error occurs
+        """
+        try:
+            self._conn.execute(
+                'DELETE FROM groups WHERE id = ?',
+                (group_id,)
+            )
+            self._conn.commit()
+        except sqlite3.Error as e:
+            self._conn.rollback()
+            raise StorageException(f"Database error deleting group: {e}") from e
+
     def get_group_expenses(self, group_id):
         """
         Get all expenses for a group.

@@ -200,6 +200,30 @@ class CostSharing: # pylint: disable=R0904
         # Remove member from group
         self._storage.delete_group_member(group_id, user_id)
 
+    def delete_group(self, group_id, user_id):
+        """
+        Delete a group (only if no expenses exist).
+
+        Args:
+            group_id: Group ID to delete
+            user_id: User ID of the requesting user (must be a member)
+
+        Raises:
+            GroupNotFoundError: If group doesn't exist
+            ForbiddenError: If user is not a member of the group
+            ConflictError: If group has existing expenses
+        """
+        # Verify authorization (raises GroupNotFoundError or ForbiddenError if invalid)
+        self.get_group_by_id(group_id, user_id)
+
+        # Check if group has any expenses
+        expenses = self._storage.get_group_expenses(group_id)
+        if len(expenses) > 0:
+            raise ConflictError("Cannot delete group with existing expenses")
+
+        # Delete group in storage layer
+        self._storage.delete_group(group_id)
+
     def get_group_expenses(self, group_id, user_id):
         """
         Get all expenses for a group, ensuring the user is a member.

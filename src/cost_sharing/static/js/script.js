@@ -310,7 +310,218 @@ function submitCreateGroup(event) {
 }
 
 function handleDeleteGroup(groupId) {
-    alert('Not implemented');
+    if (!currentToken) {
+        showError('You must be logged in to delete a group');
+        return;
+    }
+    if (!currentGroup || currentGroup.id !== groupId) {
+        // Need to fetch group details first
+        fetchGroupDetailsForDelete(groupId);
+    } else {
+        showDeleteGroupConfirmationModal(currentGroup);
+    }
+}
+
+function fetchGroupDetailsForDelete(groupId) {
+    fetch(`${API_BASE}/groups/${groupId}`, {
+        headers: {
+            'Authorization': `Bearer ${currentToken}`
+        }
+    })
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 401) {
+                    logout();
+                    throw new Error('Authentication failed');
+                }
+                if (response.status === 403) {
+                    throw new Error('You do not have access to this group');
+                }
+                if (response.status === 404) {
+                    throw new Error('Group not found');
+                }
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Failed to fetch group details');
+                });
+            }
+            return response.json();
+        })
+        .then(group => {
+            showDeleteGroupConfirmationModal(group);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError(error.message || 'Failed to fetch group details');
+        });
+}
+
+function showDeleteGroupConfirmationModal(group) {
+    // Create modal if it doesn't exist
+    let modalOverlay = document.getElementById('delete-group-modal');
+    if (!modalOverlay) {
+        modalOverlay = document.createElement('div');
+        modalOverlay.id = 'delete-group-modal';
+        modalOverlay.className = 'modal-overlay';
+        modalOverlay.innerHTML = `
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>Delete Group</h2>
+                    <button class="modal-close" onclick="closeDeleteGroupModal()">&times;</button>
+                </div>
+                <p>Are you sure you want to delete this group?</p>
+                <p style="font-weight: 600; color: #333; margin: 10px 0;">"<span id="delete-group-name"></span>"</p>
+                <p style="color: #6c757d; font-size: 0.9em;">This action cannot be undone. The group can only be deleted if it has no expenses.</p>
+                <div class="form-actions">
+                    <button type="button" class="secondary" onclick="closeDeleteGroupModal()">Cancel</button>
+                    <button type="button" class="danger" id="confirm-delete-group-btn" onclick="confirmDeleteGroup()">Delete</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modalOverlay);
+        
+        // Close modal when clicking outside
+        modalOverlay.addEventListener('click', function(event) {
+            if (event.target === modalOverlay) {
+                closeDeleteGroupModal();
+            }
+        });
+    }
+
+    // Update group name in modal
+    const nameEl = document.getElementById('delete-group-name');
+    if (nameEl) {
+        nameEl.textContent = group.name || '';
+    }
+
+    // Store group ID for deletion
+    modalOverlay.dataset.groupId = group.id;
+
+    modalOverlay.classList.add('active');
+}
+
+function closeDeleteGroupModal() {
+    const modalOverlay = document.getElementById('delete-group-modal');
+    if (modalOverlay) {
+        modalOverlay.classList.remove('active');
+    }
+}
+
+function showDeleteGroupErrorModal(errorMessage) {
+    // Create modal if it doesn't exist
+    let modalOverlay = document.getElementById('delete-group-error-modal');
+    if (!modalOverlay) {
+        modalOverlay = document.createElement('div');
+        modalOverlay.id = 'delete-group-error-modal';
+        modalOverlay.className = 'modal-overlay';
+        modalOverlay.innerHTML = `
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>Error</h2>
+                    <button class="modal-close" onclick="closeDeleteGroupErrorModal()">&times;</button>
+                </div>
+                <p style="color: #dc3545; font-weight: 600; margin: 10px 0;"><span id="delete-group-error-message"></span></p>
+                <div class="form-actions">
+                    <button type="button" class="secondary" onclick="closeDeleteGroupErrorModal()">Close</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modalOverlay);
+        
+        // Close modal when clicking outside
+        modalOverlay.addEventListener('click', function(event) {
+            if (event.target === modalOverlay) {
+                closeDeleteGroupErrorModal();
+            }
+        });
+    }
+
+    // Update error message in modal
+    const messageEl = document.getElementById('delete-group-error-message');
+    if (messageEl) {
+        messageEl.textContent = errorMessage;
+    }
+
+    modalOverlay.classList.add('active');
+}
+
+function closeDeleteGroupErrorModal() {
+    const modalOverlay = document.getElementById('delete-group-error-modal');
+    if (modalOverlay) {
+        modalOverlay.classList.remove('active');
+    }
+}
+
+function confirmDeleteGroup() {
+    const modalOverlay = document.getElementById('delete-group-modal');
+    if (!modalOverlay) {
+        return;
+    }
+
+    const groupId = parseInt(modalOverlay.dataset.groupId);
+
+    if (!groupId) {
+        showError('Group information not available');
+        return;
+    }
+
+    if (!currentToken) {
+        showError('You must be logged in to delete a group');
+        closeDeleteGroupModal();
+        return;
+    }
+
+    // Disable delete button during submission
+    const deleteButton = document.getElementById('confirm-delete-group-btn');
+    const originalText = deleteButton.textContent;
+    deleteButton.disabled = true;
+    deleteButton.textContent = 'Deleting...';
+
+    fetch(`${API_BASE}/groups/${groupId}`, {
+        method: 'DELETE',
+        headers: {
+            'Authorization': `Bearer ${currentToken}`
+        }
+    })
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 401) {
+                    logout();
+                    throw new Error('Authentication failed');
+                }
+                if (response.status === 403) {
+                    throw new Error('You do not have permission to delete this group');
+                }
+                if (response.status === 404) {
+                    throw new Error('Group not found');
+                }
+                if (response.status === 409) {
+                    return response.json().then(data => {
+                        throw new Error(data.message || 'Cannot delete this group');
+                    });
+                }
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Failed to delete group');
+                });
+            }
+            // DELETE returns 204 No Content, so no JSON to parse
+            return null;
+        })
+        .then(() => {
+            closeDeleteGroupModal();
+            // Go back to groups list
+            showGroupsList();
+            // Reload groups list
+            fetchGroups();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            closeDeleteGroupModal();
+            showDeleteGroupErrorModal(error.message || 'Failed to delete group');
+        })
+        .finally(() => {
+            deleteButton.disabled = false;
+            deleteButton.textContent = originalText;
+        });
 }
 
 function viewGroupDetails(groupId) {
