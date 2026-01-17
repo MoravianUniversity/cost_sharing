@@ -406,6 +406,55 @@ def create_app(oauth_handler, application):  # pylint: disable=R0915,R0914
                 "message": "User is already a member of this group"
             }), 409
 
+    @app.route('/groups/<int:groupId>/members/<int:userId>', methods=['DELETE'])
+    @require_auth
+    def remove_group_member(groupId, userId):  # pylint: disable=C0103, R0911
+        """
+        Remove a member from a group.
+
+        Requires valid JWT token in Authorization header.
+        A member can remove themselves, the group creator can remove any member
+        except themselves. A member cannot be removed if they are involved in
+        any expenses.
+        Returns 204 No Content on successful removal.
+        """
+        # Get user_id from g (set by require_auth decorator)
+        user_id = g.user_id
+
+        try:
+            # Remove member from group via application layer (includes all
+            # authorization checks)
+            application.remove_group_member(groupId, userId, user_id)
+
+            # Return 204 No Content (no response body)
+            return '', 204
+
+        except GroupNotFoundError as e:
+            # GroupNotFoundError can mean group not found OR user not found in
+            # group - check the message to distinguish
+            error_message = str(e)
+            if "not found in this group" in error_message:
+                return jsonify({
+                    "error": "Resource not found",
+                    "message": "User not found"
+                }), 404
+            return jsonify({
+                "error": "Resource not found",
+                "message": "Group not found"
+            }), 404
+
+        except ForbiddenError:
+            return jsonify({
+                "error": "Forbidden",
+                "message": "Access denied"
+            }), 403
+
+        except ConflictError as e:
+            return jsonify({
+                "error": "Conflict",
+                "message": str(e)
+            }), 409
+
     @app.route('/groups/<int:groupId>/expenses', methods=['GET'])
     @require_auth
     def get_group_expenses(groupId):  # pylint: disable=C0103

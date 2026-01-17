@@ -306,6 +306,27 @@ class DatabaseCostStorage: # pylint: disable=R0904
             self._conn.rollback()
             raise StorageException(f"Database error adding member: {e}") from e
 
+    def delete_group_member(self, group_id, user_id):
+        """
+        Delete a user as a member from a group.
+
+        Args:
+            group_id: Group ID
+            user_id: User ID
+
+        Raises:
+            StorageException: If a database error occurs
+        """
+        try:
+            self._conn.execute(
+                'DELETE FROM group_members WHERE group_id = ? AND user_id = ?',
+                (group_id, user_id)
+            )
+            self._conn.commit()
+        except sqlite3.Error as e:
+            self._conn.rollback()
+            raise StorageException(f"Database error deleting member: {e}") from e
+
     def get_group_expenses(self, group_id):
         """
         Get all expenses for a group.

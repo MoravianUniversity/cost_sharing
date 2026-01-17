@@ -264,6 +264,120 @@ def test_add_group_member_raises_conflict_error_for_duplicate_member(app_with_sa
 
 
 # ============================================================================
+# remove_group_member Tests
+# ============================================================================
+
+def test_member_can_remove_themself(app_with_sample_data):
+    """Test member can remove themselves from group with no expenses"""
+    app = app_with_sample_data
+
+    # Group 1: creator is user 1 (Alice), members [1, 2] (Alice, Bob),
+    # no expenses. User 2 (Bob) removes themselves.
+    app.remove_group_member(1, 2, 2)
+
+    # Verify Bob is no longer a member
+    group = app.get_group_by_id(1, 1)
+    assert_group_has_members(group, [1])
+
+
+def test_group_creator_can_remove_other_member(app_with_sample_data):
+    """Test group creator can remove another member from group with no
+    expenses"""
+    app = app_with_sample_data
+
+    # Group 1: creator is user 1 (Alice), members [1, 2] (Alice, Bob),
+    # no expenses. User 1 (Alice, creator) removes user 2 (Bob).
+    app.remove_group_member(1, 2, 1)
+
+    # Verify Bob is no longer a member
+    group = app.get_group_by_id(1, 1)
+    assert_group_has_members(group, [1])
+
+
+def test_group_creator_cannot_remove_themself(app_with_sample_data):
+    """Test group creator cannot remove themselves"""
+    app = app_with_sample_data
+
+    # Group 1: creator is user 1 (Alice), members [1, 2] (Alice, Bob).
+    # User 1 (Alice, creator) tries to remove themselves.
+    with pytest.raises(ConflictError) as exc_info:
+        app.remove_group_member(1, 1, 1)
+    assert "Creator cannot remove themself" in str(exc_info.value)
+
+
+def test_non_creator_member_cannot_remove_others(app_with_sample_data):
+    """Test non-creator member cannot remove another member"""
+    app = app_with_sample_data
+
+    # Group 2: creator is user 3 (Charlie), members [3, 1, 4] (Charlie,
+    # Alice, David). User 1 (Alice, not creator) tries to remove user 4
+    # (David).
+    with pytest.raises(ConflictError) as exc_info:
+        app.remove_group_member(2, 4, 1)
+    assert "Only group creator can remove others" in str(exc_info.value)
+
+
+def test_member_cannot_be_removed_when_involved_in_expenses_as_payer(
+        app_with_sample_data):
+    """Test member cannot be removed when involved in expenses as payer"""
+    app = app_with_sample_data
+
+    # Group 2: creator is user 3 (Charlie), members [3, 1, 4]. User 1
+    # (Alice, not creator) is involved in expenses as participant. User 1
+    # tries to remove themselves (but involved in expenses).
+    with pytest.raises(ConflictError) as exc_info:
+        app.remove_group_member(2, 1, 1)
+    assert "Cannot remove member who is involved in expenses" in str(
+        exc_info.value)
+
+
+def test_member_cannot_be_removed_when_involved_in_expenses_as_participant(
+        app_with_sample_data):
+    """Test member cannot be removed when involved in expenses as
+    participant"""
+    app = app_with_sample_data
+
+    # Group 2: has expenses where user 1 (Alice) is a participant. User 3
+    # (Charlie, creator) tries to remove user 1 (Alice, involved as
+    # participant).
+    with pytest.raises(ConflictError) as exc_info:
+        app.remove_group_member(2, 1, 3)
+    assert "Cannot remove member who is involved in expenses" in str(
+        exc_info.value)
+
+
+def test_cannot_remove_member_from_nonexistent_group(app_with_sample_data):
+    """Test cannot remove member from nonexistent group"""
+    app = app_with_sample_data
+
+    with pytest.raises(GroupNotFoundError) as exc_info:
+        app.remove_group_member(999, 1, 1)
+    assert "Group with ID 999 not found" in str(exc_info.value)
+
+
+def test_cannot_remove_nonexistent_member_from_group(app_with_sample_data):
+    """Test cannot remove nonexistent member from group"""
+    app = app_with_sample_data
+
+    # Group 1: members [1, 2] (Alice, Bob). Try to remove user 3 (Charlie)
+    # who is not a member.
+    with pytest.raises(GroupNotFoundError) as exc_info:
+        app.remove_group_member(1, 3, 1)
+    assert "User with ID 3 not found in this group" in str(exc_info.value)
+
+
+def test_non_member_cannot_remove_member_from_group(app_with_sample_data):
+    """Test non-member cannot remove member from group"""
+    app = app_with_sample_data
+
+    # Group 1: members [1, 2] (Alice, Bob). User 3 (Charlie) is not a
+    # member, tries to remove user 2 (Bob).
+    with pytest.raises(ForbiddenError) as exc_info:
+        app.remove_group_member(1, 2, 3)
+    assert "You do not have access to this group" in str(exc_info.value)
+
+
+# ============================================================================
 # get_group_expenses Tests
 # ============================================================================
 

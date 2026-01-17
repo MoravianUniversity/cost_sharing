@@ -402,11 +402,29 @@ function renderGroupMembers(members, creator) {
         return;
     }
 
+    if (!currentUser || !currentGroup) {
+        membersContainer.innerHTML = '<p>Unable to load members.</p>';
+        return;
+    }
+
     const creatorId = creator ? creator.id : null;
+    const currentUserId = currentUser.id;
 
     membersContainer.innerHTML = members.map(member => {
         const isCreator = creatorId && member.id === creatorId;
         const creatorBadge = isCreator ? '<span class="member-badge">Creator</span>' : '';
+        
+        // Show remove button if:
+        // - Member is removing themselves (and not the creator), OR
+        // - Current user is creator removing another member (not themselves)
+        const isRemovingSelf = currentUserId === member.id;
+        const isCurrentUserCreator = currentUserId === creatorId;
+        const canRemove = (isRemovingSelf && !isCurrentUserCreator) ||
+                         (isCurrentUserCreator && !isRemovingSelf);
+        
+        const removeButton = canRemove ? 
+            `<button class="danger small" onclick="handleRemoveMember(${currentGroup.id}, ${member.id})">Remove</button>` : 
+            '';
         
         return `
             <div class="member-item">
@@ -414,6 +432,7 @@ function renderGroupMembers(members, creator) {
                     <div class="member-name">${escapeHtml(member.name)} ${creatorBadge}</div>
                     <div class="member-email">${escapeHtml(member.email)}</div>
                 </div>
+                ${removeButton ? `<div class="member-actions">${removeButton}</div>` : ''}
             </div>
         `;
     }).join('');
@@ -825,6 +844,209 @@ function submitAddMember(event) {
         .finally(() => {
             submitButton.disabled = false;
             submitButton.textContent = originalText;
+        });
+}
+
+function handleRemoveMember(groupId, userId) {
+    if (!currentToken) {
+        showError('You must be logged in to remove a member');
+        return;
+    }
+    if (!currentGroup || !currentUser) {
+        showError('Group information not available');
+        return;
+    }
+
+    // Get member name for confirmation dialog
+    const member = currentGroup.members.find(m => m.id === userId);
+    if (!member) {
+        showError('Member not found');
+        return;
+    }
+
+    showRemoveMemberConfirmationModal(member, groupId, userId);
+}
+
+function showRemoveMemberConfirmationModal(member, groupId, userId) {
+    // Create modal if it doesn't exist
+    let modalOverlay = document.getElementById('remove-member-modal');
+    if (!modalOverlay) {
+        modalOverlay = document.createElement('div');
+        modalOverlay.id = 'remove-member-modal';
+        modalOverlay.className = 'modal-overlay';
+        modalOverlay.innerHTML = `
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>Remove Member</h2>
+                    <button class="modal-close" onclick="closeRemoveMemberModal()">&times;</button>
+                </div>
+                <p>Are you sure you want to remove this member from the group?</p>
+                <p style="font-weight: 600; color: #333; margin: 10px 0;"><span id="remove-member-name"></span></p>
+                <p style="color: #6c757d; font-size: 0.9em;">This action cannot be undone.</p>
+                <div class="form-actions">
+                    <button type="button" class="secondary" onclick="closeRemoveMemberModal()">Cancel</button>
+                    <button type="button" class="danger" id="confirm-remove-member-btn" onclick="confirmRemoveMember()">Remove</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modalOverlay);
+        
+        // Close modal when clicking outside
+        modalOverlay.addEventListener('click', function(event) {
+            if (event.target === modalOverlay) {
+                closeRemoveMemberModal();
+            }
+        });
+    }
+
+    // Update member name in modal
+    const nameEl = document.getElementById('remove-member-name');
+    if (nameEl) {
+        const isRemovingSelf = currentUser && currentUser.id === userId;
+        if (isRemovingSelf) {
+            nameEl.textContent = 'You will be removed from this group';
+        } else {
+            nameEl.textContent = `${escapeHtml(member.name)} (${escapeHtml(member.email)})`;
+        }
+    }
+
+    // Store member ID and group ID for removal
+    modalOverlay.dataset.userId = userId;
+    modalOverlay.dataset.groupId = groupId;
+
+    modalOverlay.classList.add('active');
+}
+
+function closeRemoveMemberModal() {
+    const modalOverlay = document.getElementById('remove-member-modal');
+    if (modalOverlay) {
+        modalOverlay.classList.remove('active');
+    }
+}
+
+function showRemoveMemberErrorModal(errorMessage) {
+    // Create modal if it doesn't exist
+    let modalOverlay = document.getElementById('remove-member-error-modal');
+    if (!modalOverlay) {
+        modalOverlay = document.createElement('div');
+        modalOverlay.id = 'remove-member-error-modal';
+        modalOverlay.className = 'modal-overlay';
+        modalOverlay.innerHTML = `
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>Error</h2>
+                    <button class="modal-close" onclick="closeRemoveMemberErrorModal()">&times;</button>
+                </div>
+                <p style="color: #dc3545; font-weight: 600; margin: 10px 0;"><span id="remove-member-error-message"></span></p>
+                <div class="form-actions">
+                    <button type="button" class="secondary" onclick="closeRemoveMemberErrorModal()">Close</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modalOverlay);
+        
+        // Close modal when clicking outside
+        modalOverlay.addEventListener('click', function(event) {
+            if (event.target === modalOverlay) {
+                closeRemoveMemberErrorModal();
+            }
+        });
+    }
+
+    // Update error message in modal
+    const messageEl = document.getElementById('remove-member-error-message');
+    if (messageEl) {
+        messageEl.textContent = errorMessage;
+    }
+
+    modalOverlay.classList.add('active');
+}
+
+function closeRemoveMemberErrorModal() {
+    const modalOverlay = document.getElementById('remove-member-error-modal');
+    if (modalOverlay) {
+        modalOverlay.classList.remove('active');
+    }
+}
+
+function confirmRemoveMember() {
+    const modalOverlay = document.getElementById('remove-member-modal');
+    if (!modalOverlay) {
+        return;
+    }
+
+    const userId = parseInt(modalOverlay.dataset.userId);
+    const groupId = parseInt(modalOverlay.dataset.groupId);
+
+    if (!userId || !groupId) {
+        closeRemoveMemberModal();
+        showRemoveMemberErrorModal('Member information not available');
+        return;
+    }
+
+    if (!currentToken) {
+        closeRemoveMemberModal();
+        showRemoveMemberErrorModal('You must be logged in to remove a member');
+        return;
+    }
+
+    // Disable remove button during submission
+    const removeButton = document.getElementById('confirm-remove-member-btn');
+    const originalText = removeButton.textContent;
+    removeButton.disabled = true;
+    removeButton.textContent = 'Removing...';
+
+    fetch(`${API_BASE}/groups/${groupId}/members/${userId}`, {
+        method: 'DELETE',
+        headers: {
+            'Authorization': `Bearer ${currentToken}`
+        }
+    })
+        .then(response => {
+            if (!response.ok) {
+                if (response.status === 401) {
+                    logout();
+                    throw new Error('Authentication failed');
+                }
+                if (response.status === 403) {
+                    throw new Error('You do not have permission to remove this member');
+                }
+                if (response.status === 404) {
+                    return response.json().then(data => {
+                        throw new Error(data.message || 'Member or group not found');
+                    });
+                }
+                if (response.status === 409) {
+                    return response.json().then(data => {
+                        throw new Error(data.message || 'Cannot remove this member');
+                    });
+                }
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Failed to remove member');
+                });
+            }
+            // DELETE returns 204 No Content, so no JSON to parse
+            return null;
+        })
+        .then(() => {
+            closeRemoveMemberModal();
+            // If user removed themselves, go back to groups list
+            if (currentUser && userId === currentUser.id) {
+                showGroupsList();
+                fetchGroups();
+            } else {
+                // Reload group details to refresh member list
+                fetchGroupDetails(groupId);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            closeRemoveMemberModal();
+            showRemoveMemberErrorModal(error.message || 'Failed to remove member');
+        })
+        .finally(() => {
+            removeButton.disabled = false;
+            removeButton.textContent = originalText;
         });
 }
 
