@@ -344,6 +344,53 @@ def test_add_group_member_fails_on_database_error(error_storage):
 
 
 # ============================================================================
+# delete_group_member Tests
+# ============================================================================
+
+def test_delete_group_member_removes_member_from_group(db_storage_with_sample_data):
+    """Test delete_group_member successfully removes a member from a group"""
+    storage = db_storage_with_sample_data
+
+    # Group 2 has members [3, 1, 4] (Charlie, Alice, David) from sample data
+    # Remove user 1 (Alice) from group 2
+    storage.delete_group_member(2, 1)
+
+    # Verify group now has members [3, 4] (Charlie, David)
+    group = storage.get_group_by_id(2)
+    assert_group_has_members(group, [3, 4])
+
+
+def test_delete_group_member_succeeds_when_member_not_in_group(db_storage_with_sample_data):
+    """Test delete_group_member succeeds even when member is not in group (DELETE affects 0 rows)"""
+    storage = db_storage_with_sample_data
+
+    # Group 1 has members [1, 2] (Alice, Bob) from sample data
+    # Try to remove user 3 (Charlie) who is not a member
+    storage.delete_group_member(1, 3)
+
+    # Verify group still has original members [1, 2]
+    group = storage.get_group_by_id(1)
+    assert_group_has_members(group, [1, 2])
+
+
+def test_delete_group_member_succeeds_for_nonexistent_group(db_storage_with_sample_data):
+    """Test delete_group_member succeeds even when group doesn't exist (DELETE affects 0 rows)"""
+    storage = db_storage_with_sample_data
+
+    # Try to remove user 1 from non-existent group
+    storage.delete_group_member(999, 1)
+
+
+def test_delete_group_member_fails_on_database_error(error_storage):
+    """Test delete_group_member raises StorageException when database error occurs"""
+    storage = error_storage
+
+    with pytest.raises(StorageException) as exc_info:
+        storage.delete_group_member(1, 1)
+    assert "Database error deleting member" in str(exc_info.value)
+
+
+# ============================================================================
 # get_group_expenses Tests
 # ============================================================================
 

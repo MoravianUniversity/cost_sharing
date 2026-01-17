@@ -144,6 +144,62 @@ class CostSharing: # pylint: disable=R0904
         # Return updated group
         return self._storage.get_group_by_id(group_id)
 
+    def remove_group_member(self, group_id, user_id, caller_user_id): # pylint: disable=R0912, R0914
+        """
+        Remove a member from a group.
+
+        A member can remove themselves. The group creator can remove any member
+        except themselves. A member cannot be removed if they are involved in
+        any expenses (either as paidBy or in splitBetween).
+
+        Args:
+            group_id: Group ID
+            user_id: User ID of the member to remove
+            caller_user_id: User ID of the authenticated caller (must be a member)
+
+        Raises:
+            GroupNotFoundError: If group doesn't exist or user to remove is not a member
+            ForbiddenError: If caller is not a member of the group
+            ConflictError: If caller is not authorized to remove this member,
+                or if member is involved in expenses
+        """
+        # Verify caller is a member (raises GroupNotFoundError or ForbiddenError if invalid)
+        group = self.get_group_by_id(group_id, caller_user_id)
+
+        # Verify the user to remove is a member of the group
+        member_ids = [member.id for member in group.members]
+        if user_id not in member_ids:
+            raise GroupNotFoundError(f"User with ID {user_id} not found in this group")
+
+        # Check authorization:
+        # - A member can remove themselves (but not if they're the creator)
+        # - The creator can remove any member except themselves
+        is_creator = caller_user_id == group.created_by.id
+        is_removing_self = caller_user_id == user_id
+
+        # Creator cannot remove themselves
+        if is_creator and is_removing_self:
+            raise ConflictError("Creator cannot remove themself")
+
+        # Non-creator member can remove themselves, or creator can remove other members
+        is_member_removing_self = (not is_creator and is_removing_self)
+        is_creator_removing_other = (is_creator and not is_removing_self)
+
+        if not is_member_removing_self and not is_creator_removing_other:
+            raise ConflictError("Only group creator can remove others")
+
+        # Check if user is involved in any expenses
+        # Note: payer is always in split_between, so checking split_between alone is
+        # sufficient
+        expenses = self._storage.get_group_expenses(group_id)
+        for expense in expenses:
+            participant_ids = [participant.id for participant in expense.split_between]
+            if user_id in participant_ids:
+                raise ConflictError("Cannot remove member who is involved in expenses")
+
+        # Remove member from group
+        self._storage.delete_group_member(group_id, user_id)
+
     def get_group_expenses(self, group_id, user_id):
         """
         Get all expenses for a group, ensuring the user is a member.

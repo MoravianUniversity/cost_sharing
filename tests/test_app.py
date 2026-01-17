@@ -898,6 +898,151 @@ def test_add_group_member_conflict(api_client, oauth_handler):
 
 
 # ============================================================================
+# DELETE /groups/{groupId}/members/{userId} Tests
+# ============================================================================
+
+def test_remove_group_member_success_member_removes_themself(api_client, oauth_handler):
+    """Test successful member removal - User 2 (Bob) removes themselves from
+    group 1."""
+    oauth_handler.validate_token_returns(2)
+
+    response = api_client.delete(
+        '/groups/1/members/2',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert response.status_code == 204
+    assert response.data == b''
+
+
+def test_remove_group_member_success_creator_removes_other(api_client, oauth_handler):
+    """Test successful member removal - User 1 (Alice, creator) removes user 2
+    (Bob) from group 1."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.delete(
+        '/groups/1/members/2',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert response.status_code == 204
+    assert response.data == b''
+
+
+def test_remove_group_member_missing_header(api_client):
+    """Test DELETE /groups/{groupId}/members/{userId} without Authorization
+    header."""
+    response = api_client.delete('/groups/1/members/2')
+
+    assert_error_response(response, 401, "Unauthorized",
+                          "Authentication required")
+
+
+def test_remove_group_member_invalid_token(api_client, oauth_handler):
+    """Test DELETE /groups/{groupId}/members/{userId} with invalid token."""
+    oauth_handler.validate_token_raises(TokenInvalidError("Invalid token"))
+
+    response = api_client.delete(
+        '/groups/1/members/2',
+        headers={'Authorization': 'Bearer invalid-token'}
+    )
+
+    assert_error_response(response, 401, "Unauthorized",
+                          "Authentication required")
+
+
+def test_remove_group_member_group_not_found(api_client, oauth_handler):
+    """Test DELETE /groups/{groupId}/members/{userId} when group doesn't
+    exist."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.delete(
+        '/groups/999/members/2',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 404, "Resource not found",
+                          "Group not found")
+
+
+def test_remove_group_member_user_not_found(api_client, oauth_handler):
+    """Test DELETE /groups/{groupId}/members/{userId} when user is not a
+    member."""
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.delete(
+        '/groups/1/members/999',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 404, "Resource not found",
+                          "User not found")
+
+
+def test_remove_group_member_forbidden_not_member(api_client, oauth_handler):
+    """Test DELETE /groups/{groupId}/members/{userId} when caller is not a
+    member."""
+    # User 2 (Bob) is NOT a member of group 2
+    oauth_handler.validate_token_returns(2)
+
+    response = api_client.delete(
+        '/groups/2/members/1',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 403, "Forbidden", "Access denied")
+
+
+def test_remove_group_member_conflict_creator_removes_themself(api_client,
+                                                                 oauth_handler):
+    """Test DELETE /groups/{groupId}/members/{userId} when creator tries to
+    remove themselves."""
+    # User 1 (Alice) is creator of group 1, tries to remove themselves
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.delete(
+        '/groups/1/members/1',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 409, "Conflict",
+                          "Creator cannot remove themself")
+
+
+def test_remove_group_member_conflict_member_removes_other(api_client,
+                                                             oauth_handler):
+    """Test DELETE /groups/{groupId}/members/{userId} when non-creator member
+    tries to remove another member."""
+    # User 1 (Alice, not creator) tries to remove user 4 (David) from group 2
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.delete(
+        '/groups/2/members/4',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 409, "Conflict",
+                          "Only group creator can remove others")
+
+
+def test_remove_group_member_conflict_involved_in_expenses(api_client,
+                                                             oauth_handler):
+    """Test DELETE /groups/{groupId}/members/{userId} when member is involved
+    in expenses."""
+    # User 1 (Alice) is involved in expenses in group 2, tries to remove
+    # themselves
+    oauth_handler.validate_token_returns(1)
+
+    response = api_client.delete(
+        '/groups/2/members/1',
+        headers={'Authorization': 'Bearer valid-token'}
+    )
+
+    assert_error_response(response, 409, "Conflict",
+                          "Cannot remove member who is involved in expenses")
+
+
+# ============================================================================
 # GET /groups/{groupId}/expenses Tests
 # ============================================================================
 
